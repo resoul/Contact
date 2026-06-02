@@ -1,14 +1,7 @@
 import Foundation
 import Alamofire
 
-// MARK: - FilmixNetworkClient
-
-/// Thin Alamofire wrapper. Owns session config, cookies, and auth headers.
 public final class FilmixNetworkClient {
-
-    public static let shared = FilmixNetworkClient()
-    private init() {}
-
     public let baseURL = "https://filmix.my"
 
     private let session: Session = {
@@ -21,9 +14,7 @@ public final class FilmixNetworkClient {
         config.httpCookieAcceptPolicy = .always
         return Session(configuration: config)
     }()
-
-    // MARK: - Generic Requests
-
+    
     public func get(url: String) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             session.request(url, method: .get).responseData { response in
@@ -31,7 +22,7 @@ public final class FilmixNetworkClient {
             }
         }
     }
-
+    
     public func getString(url: String) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             session.request(url, method: .get).responseString { response in
@@ -39,10 +30,12 @@ public final class FilmixNetworkClient {
             }
         }
     }
-
-    public func post(url: String,
-                     parameters: Parameters,
-                     headers: HTTPHeaders) async throws -> Data {
+    
+    public func post(
+        url: String,
+        parameters: Parameters,
+        headers: HTTPHeaders
+    ) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             session.request(url, method: .post, parameters: parameters, headers: headers)
                 .responseData { response in
@@ -50,11 +43,13 @@ public final class FilmixNetworkClient {
                 }
         }
     }
-
-    public func postDecodable<T: Decodable>(url: String,
-                                            parameters: Parameters,
-                                            headers: HTTPHeaders,
-                                            as type: T.Type = T.self) async throws -> T {
+    
+    public func postDecodable<T: Decodable>(
+        url: String,
+        parameters: Parameters,
+        headers: HTTPHeaders,
+        as type: T.Type = T.self
+    ) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
             session.request(url, method: .post, parameters: parameters, headers: headers)
                 .responseDecodable(of: type) { response in
@@ -62,9 +57,7 @@ public final class FilmixNetworkClient {
                 }
         }
     }
-
-    // MARK: - Cookie Helpers
-
+    
     public func cookiesString(for urlString: String) -> String {
         guard let url = URL(string: urlString),
               let cookies = HTTPCookieStorage.shared.cookies(for: url) else { return "" }
@@ -78,6 +71,9 @@ public final class FilmixNetworkClient {
             let sep = header.isEmpty ? "" : "; "
             header += "\(sep)alora=\(minotaurs.value)"
         }
+        
         return header
     }
+    
+    public init() {}
 }

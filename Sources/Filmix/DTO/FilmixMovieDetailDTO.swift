@@ -1,6 +1,6 @@
 import Foundation
 
-public struct MovieDetail {
+public struct FilmixMovieDetailDTO {
     public let id: Int
     public let movieURL: String
     public let posterThumb: String
@@ -27,7 +27,7 @@ public struct MovieDetail {
     public let description: String
     public let isAdIn: Bool
     public let isNotMovie: Bool
-    public let frames: [MovieFrame]
+    public let frames: [FilmixMovieFrameDTO]
     public let kinopoiskRating: String
     public let kinopoiskVotes: String
     public let imdbRating: String
@@ -35,7 +35,7 @@ public struct MovieDetail {
     public let userPositivePercent: Int
     public let userLikes: Int
     public let userDislikes: Int
-
+    
     public init(
         id: Int, movieURL: String,
         posterThumb: String, posterFull: String,
@@ -48,7 +48,7 @@ public struct MovieDetail {
         writers: [String], producers: [String],
         genres: [String], countries: [String],
         translate: String, description: String,
-        isAdIn: Bool, isNotMovie: Bool, frames: [MovieFrame],
+        isAdIn: Bool, isNotMovie: Bool, frames: [FilmixMovieFrameDTO],
         kinopoiskRating: String, kinopoiskVotes: String,
         imdbRating: String, imdbVotes: String,
         userPositivePercent: Int, userLikes: Int, userDislikes: Int
@@ -70,18 +70,18 @@ public struct MovieDetail {
         self.userPositivePercent = userPositivePercent
         self.userLikes = userLikes; self.userDislikes = userDislikes
     }
-
+    
     public var isSeries: Bool {
         statusOnAir != nil || lastAdded != nil || year.contains("Сезон")
     }
-
+    
     public var durationFormatted: String {
         guard let m = durationMinutes, m > 0 else { return quality }
         let h = m / 60, min = m % 60
         let base = h > 0 ? "\(h)ч \(min)м" : "\(min)м"
         return isSeries ? "\(base)/серия" : base
     }
-
+    
     public var userRating: String {
         let total = userLikes + userDislikes
         guard total > 0 else { return "—" }

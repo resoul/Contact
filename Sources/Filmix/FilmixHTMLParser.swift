@@ -1,28 +1,22 @@
 import Foundation
 import SwiftSoup
 
-// MARK: - FilmixHTMLParser
-
-/// Pure HTML → Domain model parser. No networking, no state.
-public enum FilmixHTMLParser {
-
-    // MARK: - Listing
-
-    public static func parseListing(html: String) throws -> MoviePage {
+enum FilmixHTMLParser {
+    static func parseListing(html: String) throws -> FilmixMoviePageDTO {
         let doc = try SwiftSoup.parse(html)
         var articles = try doc.select("#dle-content article.shortstory")
         if articles.isEmpty() {
             articles = try doc.select("article.shortstory")
         }
 
-        let movies: [Movie] = articles.array().enumerated().compactMap { index, article in
+        let movies: [FilmixMovieDTO] = articles.array().enumerated().compactMap { index, article in
             try? parseListingMovie(article: article, index: index)
         }
 
-        return MoviePage(movies: movies, nextPageURL: try parseNextPageURL(doc: doc))
+        return FilmixMoviePageDTO(movies: movies, nextPageURL: try parseNextPageURL(doc: doc))
     }
 
-    private static func parseListingMovie(article: Element, index: Int) throws -> Movie {
+    private static func parseListingMovie(article: Element, index: Int) throws -> FilmixMovieDTO {
         let id          = Int(try article.attr("data-id")) ?? index
         let titleRaw    = try article.select("div.full div.title-one-line h2.name").attr("content")
         let title       = titleRaw.isEmpty
@@ -65,10 +59,10 @@ public enum FilmixHTMLParser {
             return ""
         }()
 
-        let type     = isSeries ? Movie.ContentType.series(seasons: []) : .movie
+        let type     = isSeries ? FilmixMovieDTO.ContentType.series(seasons: []) : .movie
         let duration = isSeries ? (quality.isEmpty ? "Series" : quality) : (quality.isEmpty ? "—" : quality)
 
-        return Movie(
+        return FilmixMovieDTO(
             id: id, title: title, originalTitle: "",
             year: year, description: desc,
             genre: genreList.first ?? "—", genreList: genreList,
@@ -78,14 +72,12 @@ public enum FilmixHTMLParser {
             actors: actors, directors: directors, lastAdded: lastAdded
         )
     }
-
-    // MARK: - Detail
-
-    public static func parseDetail(html: String) throws -> MovieDetail {
+    
+    static func parseDetail(html: String) throws -> FilmixMovieDetailDTO {
         let doc = try SwiftSoup.parse(html)
         guard let article = try? doc.select("#dle-content article.fullstory").first()
                          ?? doc.select("#dle-content article").first()
-        else { throw MovieError.articleNotFound }
+        else { throw FilmixError.articleNotFound }
 
         let id         = Int((try? article.attr("data-id")) ?? "") ?? 0
         let movieURL   = (try? article.select(".short a.watch").attr("href")) ?? ""
@@ -113,15 +105,15 @@ public enum FilmixHTMLParser {
         let isAdIn    = !(try article.select("span.video-in").isEmpty())
         let isNotMovie = !(try article.select(".short span.not-movie").isEmpty())
 
-        let frames: [MovieFrame] = {
+        let frames: [FilmixMovieFrameDTO] = {
             let base = "https://filmix.my"
-            return (try? article.select(".frames ul.frames-list li a").array().compactMap { el -> MovieFrame? in
+            return (try? article.select(".frames ul.frames-list li a").array().compactMap { el -> FilmixMovieFrameDTO? in
                 var full  = (try? el.attr("href")) ?? ""
                 var thumb = (try? el.select("img").attr("src")) ?? ""
                 guard !thumb.isEmpty else { return nil }
                 if !full.isEmpty  && !full.hasPrefix("http")  { full  = "\(base)\(full)" }
                 if !thumb.hasPrefix("http") { thumb = "\(base)\(thumb)" }
-                return MovieFrame(thumbURL: thumb, fullURL: full)
+                return FilmixMovieFrameDTO(thumbURL: thumb, fullURL: full)
             }) ?? []
         }()
 
@@ -174,7 +166,7 @@ public enum FilmixHTMLParser {
         let userLikes    = Int((try? article.select(".rateinf.ratePos").text()) ?? "") ?? 0
         let userDislikes = Int((try? article.select(".rateinf.rateNeg").text()) ?? "") ?? 0
 
-        return MovieDetail(
+        return FilmixMovieDetailDTO(
             id: id, movieURL: movieURL,
             posterThumb: posterThumb, posterFull: posterFull,
             title: title, originalTitle: originalTitle,
@@ -193,10 +185,8 @@ public enum FilmixHTMLParser {
             userLikes: userLikes, userDislikes: userDislikes
         )
     }
-
-    // MARK: - Shared Helpers
-
-    public static func decodeData(_ data: Data) -> String {
+    
+    static func decodeData(_ data: Data) -> String {
         String(data: data, encoding: .windowsCP1251)
             ?? String(data: data, encoding: .utf8)
             ?? ""
@@ -265,8 +255,6 @@ public enum FilmixHTMLParser {
         ["/seria/", "/multser/"].contains(where: { movieURL.contains($0) })
     }
 }
-
-// MARK: - Collection+Safe
 
 private extension Collection {
     subscript(safe index: Index) -> Element? {

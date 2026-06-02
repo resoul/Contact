@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Movie: Identifiable, Hashable {
+public struct FilmixMovieDTO: Identifiable, Hashable {
     public let id: Int
     public let title: String
     public let originalTitle: String
@@ -18,7 +18,7 @@ public struct Movie: Identifiable, Hashable {
     public let actors: [String]
     public let directors: [String]
     public let lastAdded: String?
-
+    
     public init(
         id: Int, title: String, originalTitle: String,
         year: String, description: String,
@@ -36,10 +36,10 @@ public struct Movie: Identifiable, Hashable {
         self.movieURL = movieURL; self.posterURL = posterURL
         self.actors = actors; self.directors = directors; self.lastAdded = lastAdded
     }
-
+    
     public enum ContentType: Hashable {
         case movie
-        case series(seasons: [Season])
+        case series(seasons: [FilmixSeasonDTO])
 
         public var isSeries: Bool {
             if case .series = self { return true }

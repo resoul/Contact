@@ -16,8 +16,8 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.9.0"),
-        .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.7.0"),
+        .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.12.0"),
+        .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.5"),
     ],
     targets: [
         .target(

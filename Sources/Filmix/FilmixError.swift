@@ -1,10 +1,10 @@
 import Foundation
 
-public enum MovieError: LocalizedError {
+public enum FilmixError: LocalizedError {
     case articleNotFound
     case invalidURL(String)
     case decodingFailed
-
+    
     public var errorDescription: String? {
         switch self {
         case .articleNotFound:

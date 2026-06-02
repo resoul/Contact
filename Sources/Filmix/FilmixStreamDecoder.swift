@@ -1,12 +1,7 @@
 import Foundation
 
-// MARK: - StreamDecoder
-
-/// Stateless helpers for decoding obfuscated stream URLs.
-public enum StreamDecoder {
-
-    /// Parse `"[quality] url"` strings into a `[quality: url]` dictionary.
-    public static func decodeQualityMap(from list: [String]) -> [String: String] {
+enum FilmixStreamDecoder {
+    nonisolated static func decodeQualityMap(from list: [String]) -> [String: String] {
         let regex = try! NSRegularExpression(pattern: "\\[(.*?)\\]")
         var result: [String: String] = [:]
         for item in list {
@@ -19,9 +14,8 @@ public enum StreamDecoder {
         }
         return result
     }
-
-    /// Decode an obfuscated / tokenised base-64 string into a plain URL or JSON string.
-    public static func decodeTokens(_ s: String) -> String {
+    
+    nonisolated static func decodeTokens(_ s: String) -> String {
         let tokens = [
             ":<:bzl3UHQwaWk0MkdXZVM3TDdB",
             ":<:SURhQnQwOEM5V2Y3bFlyMGVI",
