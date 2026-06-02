@@ -9,6 +9,7 @@ public protocol FilmixService {
 }
 
 final public class FilmixServiceImpl: FilmixService {
+    public init() {}
     private let client: FilmixNetworkClient = FilmixNetworkClient()
     
     private static let searchHeaders: HTTPHeaders = [
