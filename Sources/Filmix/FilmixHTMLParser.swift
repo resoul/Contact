@@ -51,10 +51,10 @@ enum FilmixHTMLParser {
 
         let posterURL: String = {
             if let href = (try? article.select("div.short a.fancybox").attr("href")), !href.isEmpty {
-                return href.hasPrefix("http") ? href : "https://filmix.my\(href)"
+                return href.hasPrefix("http") ? href : "\(FilmixNetworkClient.baseURL)\(href)"
             }
             if let src = (try? article.select("div.short img").attr("src")), !src.isEmpty {
-                return src.hasPrefix("http") ? src : "https://filmix.my\(src)"
+                return src.hasPrefix("http") ? src : "\(FilmixNetworkClient.baseURL)\(src)"
             }
             return ""
         }()
@@ -84,11 +84,11 @@ enum FilmixHTMLParser {
 
         let posterThumb: String = {
             guard let src = try? article.select(".short img.poster").attr("src"), !src.isEmpty else { return "" }
-            return src.hasPrefix("http") ? src : "https://filmix.my\(src)"
+            return src.hasPrefix("http") ? src : "\(FilmixNetworkClient.baseURL)\(src)"
         }()
         let posterFull: String = {
             guard let href = try? article.select(".short a.fancybox").attr("href"), !href.isEmpty else { return posterThumb }
-            return href.hasPrefix("http") ? href : "https://filmix.my\(href)"
+            return href.hasPrefix("http") ? href : "\(FilmixNetworkClient.baseURL)\(href)"
         }()
 
         let title         = (try? article.select("h1.name").text()) ?? ""
@@ -106,7 +106,7 @@ enum FilmixHTMLParser {
         let isNotMovie = !(try article.select(".short span.not-movie").isEmpty())
 
         let frames: [FilmixMovieFrameDTO] = {
-            let base = "https://filmix.my"
+            let base = FilmixNetworkClient.baseURL
             return (try? article.select(".frames ul.frames-list li a").array().compactMap { el -> FilmixMovieFrameDTO? in
                 var full  = (try? el.attr("href")) ?? ""
                 var thumb = (try? el.select("img").attr("src")) ?? ""

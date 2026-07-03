@@ -2,7 +2,7 @@ import Foundation
 import Alamofire
 
 public final class FilmixNetworkClient {
-    public let baseURL = "https://filmix.my"
+    public static let baseURL = "https://filmix.gg"
 
     private let session: Session = {
         let config = URLSessionConfiguration.default
@@ -65,7 +65,7 @@ public final class FilmixNetworkClient {
         var header = HTTPCookie.requestHeaderFields(with: cookies)["Cookie"] ?? ""
 
         if !header.contains("alora="),
-           let baseURL = URL(string: baseURL),
+           let baseURL = URL(string: Self.baseURL),
            let minotaurs = HTTPCookieStorage.shared.cookies(for: baseURL)?
             .first(where: { $0.name == "minotaurs" }) {
             let sep = header.isEmpty ? "" : "; "

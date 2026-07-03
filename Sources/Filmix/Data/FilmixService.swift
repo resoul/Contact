@@ -15,13 +15,13 @@ final public class FilmixServiceImpl: FilmixService {
     private static let searchHeaders: HTTPHeaders = [
         "x-requested-with": "XMLHttpRequest",
         "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "origin": "https://filmix.my",
-        "referer": "https://filmix.my/search/",
+        "origin": FilmixNetworkClient.baseURL,
+        "referer": "\(FilmixNetworkClient.baseURL)/search/",
         "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
     ]
     
     public func search(query: String) async throws -> FilmixMoviePageDTO {
-        let url = "\(client.baseURL)/engine/ajax/sphinx_search.php"
+        let url = "\(FilmixNetworkClient.baseURL)/engine/ajax/sphinx_search.php"
         let params: Parameters = [
             "scf": "fx",
             "story": query,
@@ -46,11 +46,11 @@ final public class FilmixServiceImpl: FilmixService {
     
     public func fetchTranslations(postId: Int, isSeries: Bool) async throws -> [FilmixTranslationDTO] {
         let ts = Int(Date().timeIntervalSince1970)
-        let url = "\(client.baseURL)/api/movies/player-data?t=\(ts)"
+        let url = "\(FilmixNetworkClient.baseURL)/api/movies/player-data?t=\(ts)"
         let params: Parameters = ["post_id": "\(postId)", "showfull": "true"]
         let headers: HTTPHeaders = [
             "x-requested-with": "XMLHttpRequest",
-            "Cookie": client.cookiesString(for: client.baseURL),
+            "Cookie": client.cookiesString(for: FilmixNetworkClient.baseURL),
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
         ]
 
@@ -71,13 +71,13 @@ final public class FilmixServiceImpl: FilmixService {
     }
     
     public func fetchDetail(path: String) async throws -> FilmixMovieDetailDTO {
-        let url = path.hasPrefix("http") ? path : "\(client.baseURL)\(path)"
+        let url = path.hasPrefix("http") ? path : "\(FilmixNetworkClient.baseURL)\(path)"
         let data = try await client.get(url: url)
         return try FilmixHTMLParser.parseDetail(html: FilmixHTMLParser.decodeData(data))
     }
     
     public func fetchPage(url: URL?) async throws -> FilmixMoviePageDTO {
-        let target = url?.absoluteString ?? client.baseURL
+        let target = url?.absoluteString ?? FilmixNetworkClient.baseURL
         let data = try await client.get(url: target)
         return try FilmixHTMLParser.parseListing(html: FilmixHTMLParser.decodeData(data))
     }

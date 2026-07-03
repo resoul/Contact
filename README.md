@@ -22,7 +22,7 @@ Add the package via Swift Package Manager in `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-org/Filmix.git", from: "1.0.0")
+    .package(url: "https://github.com/resoul/filmix.git", from: "1.2.3")
 ],
 targets: [
     .target(
@@ -168,7 +168,7 @@ do {
 | Package | Version | Purpose |
 |---------|---------|---------|
 | [Alamofire](https://github.com/Alamofire/Alamofire) | 5.12.0+ | HTTP networking and session management |
-| [SwiftSoup](https://github.com/scinfu/SwiftSoup) | 2.13.5+ | HTML parsing |
+| [SwiftSoup](https://github.com/scinfu/SwiftSoup) | 2.13.6+ | HTML parsing |
 
 ## Disclaimer
 
