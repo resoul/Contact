@@ -32,7 +32,7 @@ public enum KinobaseHTMLParser {
         if let favId = favId, let intId = Int(favId) {
             id = intId
         } else {
-            let regex = try? NSRegularExpression(pattern: "/film/(\\d+)")
+            let regex = try? NSRegularExpression(pattern: "/(?:film|serial|tv)/(\\d+)")
             if let match = regex?.firstMatch(in: href, range: NSRange(href.startIndex..., in: href)),
                let r = Range(match.range(at: 1), in: href),
                let parsedId = Int(href[r]) {
@@ -40,7 +40,7 @@ public enum KinobaseHTMLParser {
             }
         }
         
-        let isSeries = href.contains("/serial/") || yearText.contains("сезон")
+        let isSeries = href.contains("/serial/") || href.contains("/serials") || href.contains("/tv") || href.contains("/animation") || yearText.contains("сезон")
         let quality = yearText.components(separatedBy: ",").last?.trimmingCharacters(in: .whitespaces) ?? ""
         let year = yearText.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? yearText
         

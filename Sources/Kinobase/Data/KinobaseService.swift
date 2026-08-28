@@ -36,7 +36,7 @@ public final class KinobaseServiceImpl: KinobaseService {
     
     /// Loads catalog (movies / TV series / pagination pages)
     public func fetchCatalog(pageURL: URL? = nil) async throws -> KinobaseMoviePageDTO {
-        let target = pageURL?.absoluteString ?? "\(Self.baseURL)/films"
+        let target = pageURL?.absoluteString ?? "\(Self.baseURL)/"
         let data = try await client.get(url: target)
         let html = String(data: data, encoding: .utf8) ?? ""
         return try KinobaseHTMLParser.parseListing(html: html)
