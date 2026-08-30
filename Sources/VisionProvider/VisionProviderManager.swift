@@ -1,13 +1,11 @@
 import Foundation
 import Filmix
-import Kinobase
 import Seasonvar
 import Flux
 
 /// Protocol for managing content providers and active state
 public protocol VisionProviderManagerProtocol: AnyObject, Sendable {
     var filmix: FilmixService { get }
-    var kinobase: KinobaseService { get }
     var seasonvar: SeasonvarService { get }
     
     /// Reactive state of the current active provider (with automatic deduplication)
@@ -20,18 +18,15 @@ public protocol VisionProviderManagerProtocol: AnyObject, Sendable {
 /// DI-friendly manager for coordinating content provider services and active selection
 public final class VisionProviderManager: VisionProviderManagerProtocol, @unchecked Sendable {
     public let filmix: FilmixService
-    public let kinobase: KinobaseService
     public let seasonvar: SeasonvarService
     public let activeProvider: CurrentValueDistinct<ProviderType>
     
     public init(
         filmix: FilmixService = FilmixServiceImpl(),
-        kinobase: KinobaseService = KinobaseServiceImpl(),
         seasonvar: SeasonvarService = SeasonvarServiceImpl(),
         initialProvider: ProviderType = .filmix
     ) {
         self.filmix = filmix
-        self.kinobase = kinobase
         self.seasonvar = seasonvar
         self.activeProvider = CurrentValueDistinct(initialProvider)
     }

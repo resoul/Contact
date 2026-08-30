@@ -19,10 +19,6 @@ let package = Package(
             targets: ["Filmix"]
         ),
         .library(
-            name: "Kinobase",
-            targets: ["Kinobase"]
-        ),
-        .library(
             name: "Seasonvar",
             targets: ["Seasonvar"]
         ),
@@ -42,14 +38,6 @@ let package = Package(
             path: "Sources/Filmix"
         ),
         .target(
-            name: "Kinobase",
-            dependencies: [
-                .product(name: "Alamofire", package: "Alamofire"),
-                .product(name: "SwiftSoup", package: "SwiftSoup"),
-            ],
-            path: "Sources/Kinobase"
-        ),
-        .target(
             name: "Seasonvar",
             dependencies: [
                 .product(name: "Alamofire", package: "Alamofire"),
@@ -61,7 +49,6 @@ let package = Package(
             name: "VisionProvider",
             dependencies: [
                 "Filmix",
-                "Kinobase",
                 "Seasonvar",
                 .product(name: "Flux", package: "flux"),
             ],

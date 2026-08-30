@@ -4,7 +4,6 @@ A unified content provider package for the **Vision** tvOS application.
 
 The package integrates and coordinates multiple content providers:
 - 🎬 **Filmix** (`Filmix`) — Movies, TV series, cartoons, video quality choices, and audio tracks.
-- 🍿 **Kinobase** (`Kinobase`) — Catalog, search, HLS m3u8 streams, trailers, and subtitles.
 - 📺 **Seasonvar** (`Seasonvar`) — TV series, autocomplete search, detailed cards, seasons, translations, and direct MP4 streams.
 - 🎛️ **VisionProvider** — Unified management and state layer powered by **Flux** (`VisionProviderManager`, `VisionProviderManagerProtocol`, `ProviderType`).
 
@@ -56,10 +55,9 @@ manager.activeProvider.flux
     .store(in: bag)
 
 // 3. Switch active provider
-await manager.setProvider(.kinobase)
+await manager.setProvider(.seasonvar)
 
 // 4. Direct access to underlying provider services
 let filmixResults = try await manager.filmix.search(query: "Matrix")
-let kinobaseResults = try await manager.kinobase.search(query: "Matrix")
 let seasonvarResults = try await manager.seasonvar.search(query: "Breaking Bad")
 ```
