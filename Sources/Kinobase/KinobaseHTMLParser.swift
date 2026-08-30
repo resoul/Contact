@@ -6,8 +6,14 @@ public enum KinobaseHTMLParser {
         let doc = try SwiftSoup.parse(html)
         let items = try doc.select("ul.items li.item, .movie_items .item")
         
-        let movies: [KinobaseMovieDTO] = items.array().enumerated().compactMap { index, item in
-            try? parseListingItem(item: item, index: index)
+        var seenIDs = Set<Int>()
+        var movies: [KinobaseMovieDTO] = []
+        for (index, item) in items.array().enumerated() {
+            if let movie = try? parseListingItem(item: item, index: index) {
+                if seenIDs.insert(movie.id).inserted {
+                    movies.append(movie)
+                }
+            }
         }
         
         let nextPageURL = try? parseNextPageURL(doc: doc)
