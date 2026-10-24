@@ -1,0 +1,10 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+cc_library(
+    name = "cpp_plugin",
+    srcs = ["CPPPlugin.cpp"],
+    hdrs = ["include/CPPPlugin.hpp"],
+    copts = ["-std=c++17"],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)

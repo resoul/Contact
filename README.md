@@ -1,63 +1,70 @@
-# VisionProvider
+# UIKit, iOS / iPadOS 16+
 
-A unified content provider package for the **Vision** tvOS application.
-
-The package integrates and coordinates multiple content providers:
-- 🎬 **Filmix** (`Filmix`) — Movies, TV series, cartoons, video quality choices, and audio tracks.
-- 📺 **Seasonvar** (`Seasonvar`) — TV series, autocomplete search, detailed cards, seasons, translations, and direct MP4 streams.
-- 🎛️ **VisionProvider** — Unified management and state layer powered by **Flux** (`VisionProviderManager`, `VisionProviderManagerProtocol`, `ProviderType`).
-
----
-
-## 📦 Installation
-
-### Swift Package Manager
-
-In your `Package.swift`:
-
-```swift
-dependencies: [
-    .package(path: "../vision-provider") // or remote git URL
-]
+```sh
+brew install bazelisk
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+xcodebuild -version
+xcrun simctl list devices available
+bazel --version
 ```
 
-Or add the target dependency:
-
-```swift
-.target(
-    name: "Vision",
-    dependencies: [
-        .product(name: "VisionProvider", package: "VisionProvider")
-    ]
-)
+```sh
+make simulator
+make device
+make build-simulator
+make build-device    
+make clean           
+make clean-all       
+make list-simulators
+make list-devices
+make help
 ```
 
----
+```sh
+make simulator SIMULATOR="iPhone 17" IOS_VERSION=27.0
+make simulator SIMULATOR="iPad (A16)"
+make device DEVICE="YOUR_DEVICE_UDID"
+```
 
-## 🚀 Usage with Dependency Injection (DI) and Flux
+```sh
+bazel run //:HelloBazel --config=simulator
+```
 
-```swift
-import VisionProvider
-import Flux
+Intel Mac:
 
-// 1. Instantiate via constructor (e.g. inside your DI Container)
-let manager: VisionProviderManagerProtocol = VisionProviderManager(
-    initialProvider: .filmix
-)
+```sh
+bazel run //:HelloBazel --config=simulator_intel
+```
 
-// 2. Reactively observe active provider changes via Flux
-let bag = SubscriptionBag()
+```sh
+BAZEL_APPLE_PREFER_PERSISTENT_SIMS=1 bazel run //:HelloBazel --config=simulator \
+  --@rules_apple//apple/build_settings:ios_simulator_device="<simulator name>" \
+  --@rules_apple//apple/build_settings:ios_simulator_version="<version runtime>"
+```
 
-manager.activeProvider.flux
-    .sinkOnMain { provider in
-        print("Active provider switched to: \(provider.title)")
-    }
-    .store(in: bag)
+```sh
+security find-identity -v -p codesigning
+```
 
-// 3. Switch active provider
-await manager.setProvider(.seasonvar)
+```text
+build:device --@rules_apple//apple/build_settings:signing_certificate_name="Apple Development: Your Name (TEAMID)"
+build:device --@rules_apple//apple/build_settings:ios_device=YOUR_DEVICE_UDID
+```
 
-// 4. Direct access to underlying provider services
-let filmixResults = try await manager.filmix.search(query: "Matrix")
-let seasonvarResults = try await manager.seasonvar.search(query: "Breaking Bad")
+```sh
+bazel build //:HelloBazel --config=device
+```
+
+```sh
+xcrun devicectl list devices
+bazel run //:HelloBazel --config=device
+```
+
+```sh
+brew install ios-deploy
+ios-deploy --detect
+APP_INSTALL_DIR="$(mktemp -d /tmp/hello-bazel.XXXXXX)"
+ditto -x -k cache/bazel-bin/HelloBazel.ipa "$APP_INSTALL_DIR"
+ios-deploy --id YOUR_DEVICE_UDID \
+  --bundle "$APP_INSTALL_DIR/Payload/HelloBazel.app" --debug --justlaunch
 ```

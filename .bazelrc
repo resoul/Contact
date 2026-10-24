@@ -1,0 +1,14 @@
+build --compilation_mode=dbg
+build --verbose_failures
+build --symlink_prefix=cache/bazel-
+clean --symlink_prefix=cache/bazel-
+
+# Apple Silicon simulator. On Intel Macs, use --config=simulator_intel.
+build:simulator --platforms=@apple_support//platforms:ios_sim_arm64
+build:simulator_intel --platforms=@apple_support//platforms:ios_x86_64
+
+# Physical iPhone and iPad (arm64), with development signing.
+build:device --platforms=@apple_support//platforms:ios_arm64
+
+# Optional local signing identity / device selection. Never commit this file.
+try-import %workspace%/.bazelrc.local

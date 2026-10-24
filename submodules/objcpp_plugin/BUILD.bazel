@@ -1,0 +1,19 @@
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
+
+swift_interop_hint(
+    name = "objcpp_plugin_swift_interop",
+    module_name = "ObjCXXPlugin",
+)
+
+objc_library(
+    name = "objcpp_plugin",
+    srcs = ["ObjCXXPlugin.mm"],
+    hdrs = ["include/ObjCXXPlugin.h"],
+    aspect_hints = [":objcpp_plugin_swift_interop"],
+    copts = ["-std=c++17"],
+    includes = ["include"],
+    sdk_frameworks = ["Foundation"],
+    visibility = ["//visibility:public"],
+    deps = ["//submodules/cpp_plugin:cpp_plugin"],
+)

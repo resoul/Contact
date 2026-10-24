@@ -1,0 +1,35 @@
+load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_swift//swift:swift_library.bzl", "swift_library")
+
+_PLUGIN_DEPS = [
+    "//submodules/c_plugin:c_plugin",
+    "//submodules/objc_plugin:objc_plugin",
+    "//submodules/objcpp_plugin:objcpp_plugin",
+    "//submodules/swift_plugin:swift_plugin",
+]
+
+config_setting(
+    name = "ios_device",
+    constraint_values = ["@apple_support//constraints:device"],
+)
+
+swift_library(
+    name = "AppSources",
+    srcs = glob(["App/*.swift"]),
+    module_name = "Contact",
+    deps = _PLUGIN_DEPS,
+)
+
+ios_application(
+    name = "Contact",
+    # For device builds, replace this with the App ID in your profile.
+    bundle_id = "org.airlance.Contact",
+    families = ["iphone", "ipad"],
+    infoplists = ["App/Info.plist"],
+    minimum_os_version = "16.0",
+    provisioning_profile = select({
+        ":ios_device": "signing/development.mobileprovision",
+        "//conditions:default": None,
+    }),
+    deps = [":AppSources"],
+)

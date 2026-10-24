@@ -1,0 +1,16 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
+
+swift_interop_hint(
+    name = "c_plugin_swift_interop",
+    module_name = "CPlugin",
+)
+
+cc_library(
+    name = "c_plugin",
+    srcs = ["CPlugin.c"],
+    hdrs = ["include/CPlugin.h"],
+    aspect_hints = [":c_plugin_swift_interop"],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+)
