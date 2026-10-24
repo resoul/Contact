@@ -50,3 +50,22 @@ http_archive(
     sha256 = "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9",
     build_file_content = "exports_files([\"ninja\"])",
 )
+
+# CMake is part of each codec action; no global installation is required.
+http_archive(
+    name = "codec_cmake",
+    urls = ["https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-macos-universal.tar.gz"],
+    sha256 = "3be85f5b999e327b1ac7d804cbc9acd767059e9f603c42ec2765f6ab68fbd367",
+    strip_prefix = "cmake-4.1.2-macos-universal",
+    build_file_content = """
+exports_files(["CMake.app/Contents/bin/cmake"])
+filegroup(name = "runtime", srcs = glob(["**"]), visibility = ["//visibility:public"])
+""",
+)
+
+local_codec_source = use_repo_rule("//libraries:local-codec-source.bzl", "local_codec_source")
+local_codec_source(
+    name = "codec_libjxl_sources",
+    marker = "//:MODULE.bazel",
+    source_dir = "libraries/libjxl/libjxl",
+)

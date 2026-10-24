@@ -42,7 +42,9 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>UIUserInterfaceStyle</key>
-    <string>Light</string>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Contact использует микрофон для голосовых сообщений и звонков.</string>
 </dict>
 </plist>

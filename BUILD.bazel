@@ -1,5 +1,5 @@
 load("@rules_apple//apple:ios.bzl", "ios_application")
-load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
+load("@rules_apple//apple:resources.bzl", "apple_metal_library")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
 
 config_setting(
@@ -7,31 +7,18 @@ config_setting(
     constraint_values = ["@apple_support//constraints:device"],
 )
 
+apple_metal_library(
+    name = "MessengerShaders",
+    srcs = glob(["App/MetalVFXEngine/Shaders/*.metal"]),
+    out = "default.metallib",
+    visibility = ["//visibility:public"],
+)
+
 swift_library(
     name = "AppSources",
-    srcs = glob(["App/*.swift"]),
+    srcs = glob(["App/**/*.swift"]),
     module_name = "Contact",
-    data = [":WebPSamples", ":FFmpegSamples"],
-    deps = ["//submodules/WebPBinding", "//submodules/FFMpegBinding"],
-)
-
-genrule(
-    name = "raw_webp_png_sample",
-    srcs = ["App/Resources/WebP/rivers.png"],
-    outs = ["WebPSamples/rivers.png.bin"],
-    cmd = "cp \"$(location App/Resources/WebP/rivers.png)\" \"$@\"",
-)
-
-apple_resource_bundle(
-    name = "WebPSamples",
-    bundle_name = "WebPSamples",
-    resources = ["App/Resources/WebP/boats.jpg", ":raw_webp_png_sample"],
-)
-
-apple_resource_bundle(
-    name = "FFmpegSamples",
-    bundle_name = "FFmpegSamples",
-    resources = ["App/Resources/FFmpeg/demo.mp4"],
+    data = [":MessengerShaders"],
 )
 
 ios_application(
@@ -45,4 +32,5 @@ ios_application(
         "//conditions:default": None,
     }),
     deps = [":AppSources"],
+    visibility = ["//visibility:public"],
 )

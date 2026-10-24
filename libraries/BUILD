@@ -1,1 +1,1 @@
-exports_files(["build-codec.sh"])
+exports_files(["build-codec.sh", "build-cmake-codec.sh"])

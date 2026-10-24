@@ -1,6 +1,6 @@
 # Contact
 
-Contact is a Swift/UIKit app for iOS and iPadOS 16.0 and later. It builds for arm64 devices and Apple Silicon simulators. The x86_64 architecture is not supported.
+Contact is a Swift/UIKit messenger prototype for iOS and iPadOS 16.0 and later. It builds for arm64 devices and Apple Silicon simulators. The x86_64 architecture is not supported.
 
 ## Requirements
 
@@ -13,7 +13,13 @@ xcodebuild -version
 xcrun simctl list devices available
 ```
 
-Clone the repository with `--recurse-submodules`. To fetch the libraries in an existing checkout, run:
+Clone the repository and download all pinned library submodules in one step:
+
+```sh
+git clone --recurse-submodules https://github.com/resoul/Contact.git
+```
+
+If you already cloned the repository without its submodules, initialize and download them from the Contact root directory:
 
 ```sh
 git submodule update --init --recursive
@@ -73,10 +79,14 @@ Launching on a device through `devicectl` requires iOS 17 or later; the app itse
 ## Project layout
 
 ```text
-App/                         Swift/UIKit app and sample media
+App/Messenger/               MiniTelegram screens, models, and local fixtures
+App/MetalVFXEngine/          Shared effects and Metal shader sources
+App/Support/                 iOS compatibility helpers
 libraries/                   Bazel rules, build scripts, and library git submodules
 submodules/FFMpegBinding/     Objective-C FFmpeg API for Swift
 submodules/WebPBinding/       Objective-C WebP API for Swift
+submodules/MozjpegBinding/    JPEG/JPEG XL APIs and stripped thumbnails
+submodules/ImageCompression/ Swift image compression helpers
 cache/                       Ignored Bazel outputs and symlinks
 BUILD.bazel                  App, Swift module, and resources
 MODULE.bazel                 Bazel dependencies and build tools
@@ -93,10 +103,16 @@ Git tracks app sources, bindings, `BUILD` and `.bzl` files, build scripts, `.git
 | libvpx | 1.17.0 / `6df3ec34557879fff673706f4a1d9fbd0f3a6f0e` | `//libraries/libvpx:vpx` |
 | Opus | 1.6.1 / `22244de5a79bd1d6d623c32e72bf1954b56235be` | `//libraries/opus:opus` |
 | dav1d | 1.5.4 / `54706fc6bc0cdecab7e9593974a4039cc038fca7` | `//libraries/dav1d:dav1d` |
+| mozjpeg | 4.1.5 / `6c9f0897afa1c2738d7222a0a9ab49e8b536a267` | `//libraries/mozjpeg` |
+| libjxl | 0.12.0 / `a7a9c787341cf703dede03c2009fa460cae5e5df` | `//libraries/libjxl` |
 
 WebP is built directly with `cc_library` and ARM NEON. FFmpeg and libvpx use their upstream configure/Make builds; Opus and dav1d use Meson. Build scripts work with source copies inside Bazel actions, leaving submodule checkouts untouched. Device and simulator builds produce separate outputs. The default compilation mode is `dbg`; use `-c opt` for release optimization.
 
-Meson 1.6.0, Ninja 1.12.1, pkgconf 2.5.1, gas-preprocessor, and the generated Opus models are pinned in `MODULE.bazel` with SHA-256 checksums. Global Meson, Ninja, or pkgconf installations are not required.
+Meson 1.6.0, Ninja 1.12.1, pkgconf 2.5.1, gas-preprocessor, and the generated Opus models are pinned in `MODULE.bazel` with SHA-256 checksums. Global Meson, Ninja, or pkgconf installations are not required. mozjpeg and libjxl use upstream CMake with pinned CMake 4.1.2 and Ninja. libjxl uses the Brotli, Highway, and skcms commits pinned by its 0.12.0 release. The local source repository stages libjxl without its upstream Bazel BUILD files, so CMake inputs remain tracked without modifying the submodule. Only those three nested submodules are needed for this build:
+
+```sh
+git -C libraries/libjxl/libjxl submodule update --init third_party/brotli third_party/highway third_party/skcms
+```
 
 Build individual distributions:
 
@@ -119,63 +135,35 @@ The build exports static `avformat`, `avcodec`, `avutil`, and `swresample` libra
 
 Only the local `file` protocol is enabled. Network protocols, the FFmpeg CLI, libavfilter, libswscale, and libavdevice are disabled. GPL and nonfree components are disabled; upstream license texts remain in the submodules.
 
-## Demos and APIs
+## Messenger
 
-### FFmpeg
+Contact opens the MiniTelegram interface directly: chats, contacts, calls, settings, profiles, stories, media previews, composer, reactions, and themes. The sources were copied from the current working tree of `demo/controller/controller/MiniTelegram` and its shared `MetalVFXEngine`, including the fluid-reaction implementation. Contact builds independently of that checkout.
 
-The first tab plays `App/Resources/FFmpeg/demo.mp4`: a four-second H.264/AAC clip at 640×360 and 24 fps, with 96 frames and a 440 Hz audio track. FFmpeg decodes video frames and PCM audio; UIKit displays the frames and `AVAudioPlayer` plays the PCM. The demo supports play/pause, seeking, opening a video from Files, and MP4 remux verification by decoding the output and comparing frames and audio.
+`App/Messenger/Models` contains shared chat/account models; `App/Messenger/Fixtures/MTData.swift` supplies the prototype's local accounts, people, chats, and stories. Messages, read receipts, recording, and calls are simulated and kept in memory. There is no backend, authentication, or persistent message database yet. The sample passcode is `1234` and is a UI demonstration. Media previews are generated locally by `DemoPhotos`.
 
-The Bazel dependency is `//submodules/FFMpegBinding`:
+All 19 shader sources are compiled with Bazel's `apple_metal_library` into `default.metallib` at the app bundle root, where `VFXGPU` loads it. This includes liquid reactions, emoji bursts, chat wallpaper, spoilers, dust deletion, story rings, and liquid theme transitions. The full shared effect engine remains available for subsequent messenger features.
+
+The app keeps minimum iOS 16. Symbol effects use native iOS 17+ APIs with cross-fade/spring fallbacks on iOS 16. Theme changes update static layer colors on both versions. The root starts in dark mode and supports the original light/dark transition. The header's settings button replaces the demo's exit button; settings display Contact's own About screen. Page dependencies are assigned before loading their views so Settings is populated on first entry. The theme reveal uses wall-clock duration so dropped frames cannot prolong its input-blocking overlay.
+
+## Media APIs
+
+Codec libraries and bindings remain independent Bazel targets. Their demo view controllers and sample photo/video resource bundles have been removed from the application.
 
 ```swift
 import FFMpegBinding
-
-// This call is synchronous; run it on a background queue.
-let video = try FFMpegMedia.decodeVideo(path, maxDuration: 8)
-let firstPNG = video.frames.first?.pngData
-let pcm = video.pcmData // S16LE, 48 kHz, stereo
-```
-
-This is a bounded in-memory preview. The demo shows the first eight seconds of a selected video; the API supports up to ten seconds, 30 PNG previews per second, and a maximum image edge of 320 pixels. Core Image preview conversion supports 8-bit YUV420/YUVA420. Longer videos, complex edit lists, and discontinuous timestamps require a streaming player with a full playback timeline.
-
-The low-level API provides format and IO contexts, packets, decoders, frames, PCM resampling, VP9 alpha encoding, MP4/MPEG-TS remuxing, and packet-aligned Opus trimming into Ogg. The MPEG-TS helper preserves video and AAC audio. The binding is adapted from [Telegram-iOS FFMpegBinding](https://github.com/TelegramMessenger/Telegram-iOS/tree/fb0e62ba8a147f0821da6aa63c09da7d79a10111/submodules/FFMpegBinding) for FFmpeg 9, with fixes for EOF handling, IO context ownership, audio buffer sizing, frame durations, and error handling.
-
-The sample clip is generated without third-party media. Recreate it with a host FFmpeg build that includes libx264:
-
-```sh
-ffmpeg -f lavfi -i 'testsrc2=size=640x360:rate=24:duration=4' \
-  -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=4' \
-  -c:v libx264 -profile:v main -pix_fmt yuv420p -g 24 -bf 2 -crf 24 \
-  -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
-  -c:a aac -b:a 96k -movflags +faststart -shortest App/Resources/FFmpeg/demo.mp4
-```
-
-### WebP
-
-The WebP tab compares source JPEG/PNG photos with decoded WebP images and displays file sizes and processing time. It supports quality settings from 0 to 100, lossless encoding, and opening a photo from Files.
-
-The Bazel dependency is `//submodules/WebPBinding`:
-
-```swift
 import WebPBinding
+import MozjpegBinding
+import ImageCompression
 
-let source = UIImage(data: jpegOrPNGData)!
-let lossy = try WebP.convert(toWebP: source, quality: 90)
-let lossless = try WebP.convert(toLosslessWebP: source)
-let image = WebP.convert(fromWebP: lossy)
+// These calls are synchronous; run them on a background queue.
+let video = try FFMpegMedia.decodeVideo(path, maxDuration: 8)
+let webp = try WebP.convert(toWebP: image, quality: 90)
+let jpeg = try MozJPEG.encode(image, quality: 85, progressive: true, fast: false)
+let xl = try MozJPEG.encodeXL(image, quality: 100)
+let tiny = compressImageMiniThumbnail(image, type: .image)
+let reconstructedJPEG = tiny.flatMap { decodeTinyThumbnail($0) }
 ```
 
-Operations are synchronous; run encoding on a background queue. Quality 100 is still lossy. Alpha is preserved, images are normalized to upright sRGB, and metadata is not copied. Animated WebP is not supported. Encoding reports errors through `WebPErrorDomain`; decoding returns `nil` for invalid data.
+Consumers add the relevant binding to their Bazel `deps`: `//submodules/FFMpegBinding`, `//submodules/WebPBinding`, `//submodules/MozjpegBinding`, or `//submodules/ImageCompression`. The messenger currently uses its generated fixtures; codec dependencies can be added when real media flows are introduced.
 
-## Verification
-
-The iPhone and simulator arm64 builds were checked with a minimum iOS version of 16.0. Simulator checks covered H.264/AAC, HEVC, VP9/Opus, AV1/dav1d, all 96 sample video frames, 768,000 bytes of PCM, MP4 remux with identical frames and audio, MPEG-TS remux, Opus trimming, and twelve VP9 alpha frames. UI checks covered playback, pause, seeking, playback completion, and remux. Hardware decoding on a physical device has not been tested.
-
-Lossless WebP round trips preserved the sRGB pixels in both photos. The following sizes were measured at quality 90:
-
-| Input | Original bytes | Lossy WebP bytes | Lossless WebP bytes |
-| --- | ---: | ---: | ---: |
-| JPEG, 452×700 | 80,435 | 49,374 | 278,602 |
-| PNG, 503×900 | 1,133,080 | 223,822 | 770,856 |
-
-Size and speed depend on the image and build mode. Temporary verification sources and targets were removed; demo photos and video remain app resources.
+All six Telegram MozjpegBinding entry points remain available, including JPEG XL encoding/decoding. The compatibility JPEG function uses quality 72 and encodes in memory without touching `tempFilePath`. Mini-thumbnails retain Telegram's v1 format. JPEG flattens alpha onto white; JPEG XL preserves alpha, with lossless encoding at quality 100 after sRGB normalization. Images are limited to 32 million pixels; animated JPEG XL is rejected.
