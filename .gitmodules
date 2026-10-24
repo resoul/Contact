@@ -1,0 +1,15 @@
+[submodule "libraries/webp/libwebp"]
+	path = libraries/webp/libwebp
+	url = https://github.com/webmproject/libwebp.git
+[submodule "libraries/libvpx/libvpx"]
+	path = libraries/libvpx/libvpx
+	url = https://github.com/webmproject/libvpx.git
+[submodule "libraries/opus/opus"]
+	path = libraries/opus/opus
+	url = https://github.com/xiph/opus.git
+[submodule "libraries/dav1d/dav1d"]
+	path = libraries/dav1d/dav1d
+	url = https://code.videolan.org/videolan/dav1d.git
+[submodule "libraries/ffmpeg/ffmpeg"]
+	path = libraries/ffmpeg/ffmpeg
+	url = https://github.com/FFmpeg/FFmpeg.git

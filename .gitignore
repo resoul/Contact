@@ -1,7 +1,23 @@
+# macOS metadata.
 .DS_Store
+
+# Bazel output symlinks and the configured project cache.
 /bazel-*
 /cache/
+
+# Machine-specific Bazel settings and signing identity.
 /.bazelrc.local
+
+# Xcode build output and per-user state.
+/DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Local provisioning profiles, certificates, and private keys.
 /signing/*.mobileprovision
 /signing/*.p12
+/signing/*.pfx
 /signing/*.cer
+/signing/*.p8
+/signing/*.pem
+/signing/*.key

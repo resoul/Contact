@@ -1,12 +1,6 @@
 load("@rules_apple//apple:ios.bzl", "ios_application")
+load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
-
-_PLUGIN_DEPS = [
-    "//submodules/c_plugin:c_plugin",
-    "//submodules/objc_plugin:objc_plugin",
-    "//submodules/objcpp_plugin:objcpp_plugin",
-    "//submodules/swift_plugin:swift_plugin",
-]
 
 config_setting(
     name = "ios_device",
@@ -17,12 +11,31 @@ swift_library(
     name = "AppSources",
     srcs = glob(["App/*.swift"]),
     module_name = "Contact",
-    deps = _PLUGIN_DEPS,
+    data = [":WebPSamples", ":FFmpegSamples"],
+    deps = ["//submodules/WebPBinding", "//submodules/FFMpegBinding"],
+)
+
+genrule(
+    name = "raw_webp_png_sample",
+    srcs = ["App/Resources/WebP/rivers.png"],
+    outs = ["WebPSamples/rivers.png.bin"],
+    cmd = "cp \"$(location App/Resources/WebP/rivers.png)\" \"$@\"",
+)
+
+apple_resource_bundle(
+    name = "WebPSamples",
+    bundle_name = "WebPSamples",
+    resources = ["App/Resources/WebP/boats.jpg", ":raw_webp_png_sample"],
+)
+
+apple_resource_bundle(
+    name = "FFmpegSamples",
+    bundle_name = "FFmpegSamples",
+    resources = ["App/Resources/FFmpeg/demo.mp4"],
 )
 
 ios_application(
     name = "Contact",
-    # For device builds, replace this with the App ID in your profile.
     bundle_id = "org.airlance.Contact",
     families = ["iphone", "ipad"],
     infoplists = ["App/Info.plist"],

@@ -1,11 +1,11 @@
 build --compilation_mode=dbg
 build --verbose_failures
+build --ios_minimum_os=16.0
 build --symlink_prefix=cache/bazel-
 clean --symlink_prefix=cache/bazel-
 
-# Apple Silicon simulator. On Intel Macs, use --config=simulator_intel.
+# Apple Silicon simulator (arm64).
 build:simulator --platforms=@apple_support//platforms:ios_sim_arm64
-build:simulator_intel --platforms=@apple_support//platforms:ios_x86_64
 
 # Physical iPhone and iPad (arm64), with development signing.
 build:device --platforms=@apple_support//platforms:ios_arm64

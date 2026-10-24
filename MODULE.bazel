@@ -1,6 +1,52 @@
 module(name = "hello_bazel", version = "1.0.0")
 
 bazel_dep(name = "apple_support", version = "2.9.1")
+bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_apple", version = "5.3.0")
 bazel_dep(name = "rules_cc", version = "0.2.25")
 bazel_dep(name = "rules_swift", version = "4.1.1")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_archive(
+    name = "codec_pkgconf",
+    urls = ["https://distfiles.ariadne.space/pkgconf/pkgconf-2.5.1.tar.xz"],
+    sha256 = "cd05c9589b9f86ecf044c10a2269822bc9eb001eced2582cfffd658b0a50c243",
+    strip_prefix = "pkgconf-2.5.1",
+    build_file_content = """
+exports_files(["configure"])
+filegroup(name = "sources", srcs = glob(["**"]), visibility = ["//visibility:public"])
+""",
+)
+
+http_file(
+    name = "codec_gas_preprocessor",
+    urls = ["https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/ac1836309c2e77023c228b7184485597286289d3/gas-preprocessor.pl"],
+    sha256 = "7124d70cdecba7c5612f9a71fbf3f28514dd9c2ca3022f58ad793f88bb925fcf",
+    downloaded_file_path = "gas-preprocessor.pl",
+)
+
+http_file(
+    name = "codec_opus_models",
+    urls = ["https://media.xiph.org/opus/models/opus_data-a5177ec6fb7d15058e99e57029746100121f68e4890b1467d4094aa336b6013e.tar.gz"],
+    sha256 = "a5177ec6fb7d15058e99e57029746100121f68e4890b1467d4094aa336b6013e",
+)
+
+http_archive(
+    name = "codec_meson",
+    urls = ["https://github.com/mesonbuild/meson/releases/download/1.6.0/meson-1.6.0.tar.gz"],
+    sha256 = "999b65f21c03541cf11365489c1fad22e2418bb0c3d50ca61139f2eec09d5496",
+    strip_prefix = "meson-1.6.0",
+    build_file_content = """
+exports_files(["meson.py"])
+filegroup(name = "runtime", srcs = glob(["**"]), visibility = ["//visibility:public"])
+""",
+)
+
+http_archive(
+    name = "codec_ninja",
+    urls = ["https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-mac.zip"],
+    sha256 = "89a287444b5b3e98f88a945afa50ce937b8ffd1dcc59c555ad9b1baf855298c9",
+    build_file_content = "exports_files([\"ninja\"])",
+)
