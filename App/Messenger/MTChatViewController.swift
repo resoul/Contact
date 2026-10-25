@@ -23,12 +23,31 @@ final class MTChatViewController: UIViewController {
             self.wallpaper.setNight(self.traitCollection.userInterfaceStyle == .dark, animated: true)
     }
 
+    private let storageOrigin = UUID()
+    private let storageSession: MTAccountSession?
+    private var applyingStoredChange = false
+    private var loadingOlder = false
+    private var hasOlderHistory = true
     private var chat: MTChat
     private weak var home: MTHomeViewController?
     private var sections: [(title: String, messages: [MTMessage])]
 
     private let wallpaper = ChannelWallpaperView()
     private let table = UITableView(frame: .zero, style: .plain)
+    private let replySwipeEffect = MTReplySwipeEffect()
+    private let channelEffectsHost = UIView()
+    private let channelReactionLiquid = FeedLiquidLayer(color: ChannelPalette.accent, gloss: 0.5)
+    private let channelVacuum = SandVacuumAnimator()
+    private var channelPicker: ReactionPickerOverlay?
+    private var channelForward: ForwardDropOverlay?
+    private var channelComments: CommentsSheetOverlay?
+    private var channelPostHeights: [Int: (width: CGFloat, height: CGFloat)] = [:]
+    private let nextChannelIndicator = MTNextChannelIndicator()
+    private let channelAccount: Int
+    private var channelTransitioning = false
+    private var channelTransitionOverlay: UIView?
+    private var channelAvatarFlyer: UIView?
+    private var channelHintShown = false
     private let reactionFluid = MTReactionFluidView()
     private let fluidTouchObserver = TouchObserverGestureRecognizer()
     private var lastFluidTouch: (point: CGPoint, time: CFTimeInterval)?
@@ -84,14 +103,10 @@ final class MTChatViewController: UIViewController {
     init(chat: MTChat, home: MTHomeViewController) {
         self.chat = chat
         self.home = home
-        sections = MTChatScript.sections(for: chat)
+        storageSession = home.storageSession
+        channelAccount = home.currentAccount
+        sections = home.storageSession?.sections(for: chat.id) ?? [("Today", [])]
         super.init(nibName: nil, bundle: nil)
-        // Where reading stopped: a band before the unread messages.
-        if chat.unread > 0, let last = sections.indices.last {
-            let count = sections[last].messages.count
-            sections[last].messages.insert(MTMessage(kind: .unreadDivider, outgoing: false, time: ""),
-                                           at: max(0, count - min(chat.unread, count)))
-        }
     }
 
     required init?(coder: NSCoder) {
@@ -100,6 +115,8 @@ final class MTChatViewController: UIViewController {
 
     deinit {
         if let backgroundObserver { NotificationCenter.default.removeObserver(backgroundObserver) }
+        let session = storageSession, token = storageOrigin
+        Task { @MainActor in session?.stopObserving(token: token) }
     }
 
     override func viewDidLoad() {
@@ -115,14 +132,22 @@ final class MTChatViewController: UIViewController {
         table.accessibilityIdentifier = "contact.messages"
         table.backgroundColor = .clear
         table.separatorStyle = .none
+        table.alwaysBounceVertical = true
         table.contentInsetAdjustmentBehavior = .never
         table.keyboardDismissMode = .interactive
         table.sectionHeaderTopPadding = 0
         table.register(MTMessageCell.self, forCellReuseIdentifier: "message")
+        table.register(MTChannelPostCell.self, forCellReuseIdentifier: "channelPost")
+        table.estimatedRowHeight = 0
         table.register(MTDateHeader.self, forHeaderFooterViewReuseIdentifier: "date")
         table.dataSource = self
         table.delegate = self
         view.addSubview(table)
+        view.addSubview(nextChannelIndicator)
+        view.addSubview(replySwipeEffect)
+        view.addSubview(channelEffectsHost)
+        channelEffectsHost.isUserInteractionEnabled = false
+        channelEffectsHost.addSubview(channelReactionLiquid)
         view.addSubview(reactionFluid)
         reactionFluid.clipsToBounds = true
         reactionFluid.geometryProvider = { [weak self] in self?.fluidObstacles() ?? [] }
@@ -130,6 +155,10 @@ final class MTChatViewController: UIViewController {
         table.addGestureRecognizer(fluidTouchObserver)
         backgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification,
                                                                     object: nil, queue: .main) { [weak self] _ in
+            self?.saveChannelReadingPosition()
+            self?.stopChannelTransition()
+            self?.stopChannelPostEffects()
+            self?.replySwipeEffect.stop()
             self?.stopReactionAnimations()
         }
 
@@ -150,7 +179,7 @@ final class MTChatViewController: UIViewController {
         input.onAttach = { [weak self] in self?.openAttach() }
         input.onModeToggle = { [weak self] video in
             guard let self else { return }
-            MTViews.toast(video ? "Удерживайте — видеосообщение" : "Удерживайте — голосовое", symbol: video ? "video.fill" : "mic.fill",
+            MTViews.toast(video ? "Hold to record a video message" : "Hold to record a voice message", symbol: video ? "video.fill" : "mic.fill",
                           in: self.view, top: self.pinned.frame.maxY + 8)
         }
         input.onHold = { [weak self] gesture in self?.recordGesture(gesture) }
@@ -164,6 +193,34 @@ final class MTChatViewController: UIViewController {
         view.addSubview(scrollDown)
         buildSelectionBars()
         buildSearch()
+        configureChannelChrome()
+        observeStoredHistory()
+    }
+
+    private func committed(_ action: () -> Void) {
+        applyingStoredChange = true
+        action()
+        applyingStoredChange = false
+    }
+
+    private func observeStoredHistory() {
+        storageSession?.stopObserving(token: storageOrigin)
+        storageSession?.observeHistory(chatID: chat.id, token: storageOrigin) { [weak self] origin in
+            guard let self, origin != self.storageOrigin, !self.channelTransitioning else { return }
+            self.reloadStoredHistory()
+        }
+    }
+
+    private func reloadStoredHistory() {
+        guard let storageSession else { return }
+        let offset = table.contentOffset
+        let bottom = distanceFromBottom < 80
+        sections = storageSession.sections(for: chat.id)
+        channelPostHeights.removeAll()
+        table.reloadData()
+        table.layoutIfNeeded()
+        if bottom { scrollToBottom(animated: false) }
+        else { table.contentOffset = offset }
     }
 
     private var nightSet = false
@@ -178,13 +235,25 @@ final class MTChatViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        if chat.kind == .channel {
+            if !channelHintShown {
+                channelHintShown = true
+                MTViews.toast("Scroll to the end and pull up", symbol: "arrow.up.circle", in: view,
+                              top: pinned.frame.maxY + 8)
+            }
+            return
+        }
         guard !Self.hintShown else { return }
         Self.hintShown = true
-        MTViews.toast("Двойной тап — жидкая реакция · удержание — выбор", symbol: "drop.fill", in: view, top: pinned.frame.maxY + 8)
+        MTViews.toast("Double-tap for ❤️ · hold for reactions", symbol: "heart.fill", in: view, top: pinned.frame.maxY + 8)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        saveChannelReadingPosition()
+        stopChannelTransition()
+        stopChannelPostEffects()
+        replySwipeEffect.stop()
         stopReactionAnimations()
     }
 
@@ -193,7 +262,7 @@ final class MTChatViewController: UIViewController {
         header.addSubview(headerBackground)
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: "chevron.backward", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
-        configuration.title = "Чаты"
+        configuration.title = "Chats"
         configuration.imagePadding = 4
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
         backButton.configuration = configuration
@@ -218,7 +287,7 @@ final class MTChatViewController: UIViewController {
         titleTap.tag = 77
         titleTap.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openProfile)))
         titleTap.isAccessibilityElement = true
-        titleTap.accessibilityLabel = "Профиль"
+        titleTap.accessibilityLabel = "Profile"
         titleTap.accessibilityIdentifier = "contact.profile"
         titleTap.accessibilityTraits = .button
         header.addSubview(titleTap)
@@ -226,7 +295,7 @@ final class MTChatViewController: UIViewController {
             guard let self else { return }
             self.home?.call(self.chat.person)
         }, for: .touchUpInside)
-        callButton.accessibilityLabel = "Звонок"
+        callButton.accessibilityLabel = "Call"
         callButton.accessibilityIdentifier = "contact.call"
         header.addSubview(callButton)
 
@@ -235,13 +304,13 @@ final class MTChatViewController: UIViewController {
         miniButtons.spacing = 8
         miniButtons.alpha = 0
         let actions: [(String, String, () -> Void)] = [
-            ("phone.fill", "Звонок", { [weak self] in
+            ("phone.fill", "Call", { [weak self] in
                 guard let self else { return }
                 self.home?.call(self.chat.person)
             }),
-            ("magnifyingglass", "Поиск", { [weak self] in self?.startSearch() }),
-            ("paintpalette.fill", "Тема", { [weak self] in self?.openThemes() }),
-            ("person.crop.circle", "Профиль", { [weak self] in self?.openProfile() }),
+            ("magnifyingglass", "Search", { [weak self] in self?.startSearch() }),
+            ("paintpalette.fill", "Theme", { [weak self] in self?.openThemes() }),
+            ("person.crop.circle", "Profile", { [weak self] in self?.openProfile() }),
         ]
         for (symbol, title, handler) in actions {
             var configuration = UIButton.Configuration.filled()
@@ -265,7 +334,9 @@ final class MTChatViewController: UIViewController {
             miniButtons.addArrangedSubview(button)
         }
         header.addSubview(miniButtons)
-        header.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(headerPanned(_:))))
+        if chat.kind != .channel {
+            header.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(headerPanned(_:))))
+        }
     }
 
     // MARK: Header → mini profile
@@ -299,7 +370,7 @@ final class MTChatViewController: UIViewController {
         header.viewWithTag(77)?.frame = nameLabel.frame.union(statusLabel.frame)
         miniButtons.frame = CGRect(x: 16, y: top + 160 + (1 - min(e, 1)) * 24, width: width - 32, height: 56)
         miniButtons.alpha = islandSmoothstep(0.55, 1, e)
-        pinned.frame = CGRect(x: 0, y: header.frame.maxY, width: width, height: 46)
+        pinned.frame = CGRect(x: 0, y: header.frame.maxY, width: width, height: chat.kind == .channel ? 0 : 46)
     }
 
     private func setHeaderExpansion(_ value: CGFloat, animated: Bool) {
@@ -337,7 +408,7 @@ final class MTChatViewController: UIViewController {
     private func buildSelectionBars() {
         selectionHeader.addSubview(MTViews.barBackground())
         let cancel = UIButton(type: .system)
-        cancel.setTitle("Отмена", for: .normal)
+        cancel.setTitle("Cancel", for: .normal)
         cancel.titleLabel?.font = .systemFont(ofSize: 17)
         cancel.tintColor = MTPalette.accent
         cancel.tag = 1
@@ -364,12 +435,16 @@ final class MTChatViewController: UIViewController {
             guard let self, !self.selectedIDs.isEmpty else { return }
             let count = self.selectedIDs.count
             self.setSelecting(false)
-            MTViews.toast("Переслано в «Избранное»: \(count)", symbol: "arrowshape.turn.up.right.fill", in: self.view,
+            MTViews.toast("Forwarded to Saved Messages: \(count)", symbol: "arrowshape.turn.up.right.fill", in: self.view,
                           top: self.pinned.frame.maxY + 8)
         }, for: .touchUpInside)
         selectionBar.addSubview(forward)
         selectionBar.transform = CGAffineTransform(translationX: 0, y: 120)
         view.addSubview(selectionBar)
+    }
+
+    private var messageAreaBottom: CGFloat {
+        chat.kind == .channel ? view.bounds.height - view.safeAreaInsets.bottom : input.frame.minY
     }
 
     private var headerHeight: CGFloat { view.safeAreaInsets.top + 52 }
@@ -378,6 +453,9 @@ final class MTChatViewController: UIViewController {
         super.viewDidLayoutSubviews()
         let width = view.bounds.width
         wallpaper.frame = view.bounds
+        replySwipeEffect.frame = view.bounds
+        channelEffectsHost.frame = view.bounds
+        channelReactionLiquid.frame = channelEffectsHost.bounds
         let top = view.safeAreaInsets.top
         layoutHeader()
 
@@ -407,26 +485,29 @@ final class MTChatViewController: UIViewController {
 
         table.frame = view.bounds
         let topInset = pinned.frame.maxY
-        let bottomInset = view.bounds.height - input.frame.minY + 4
+        let bottomInset = view.bounds.height - messageAreaBottom + 4
         let wasAtBottom = isNearBottom
         table.contentInset = UIEdgeInsets(top: topInset, left: 0, bottom: bottomInset, right: 0)
         table.verticalScrollIndicatorInsets = table.contentInset
         // Keep liquid below the pinned bar and above the composer, including with the keyboard up.
-        reactionFluid.frame = CGRect(x: 0, y: topInset, width: width, height: max(0, input.frame.minY - topInset))
-        scrollDown.frame = CGRect(x: width - 54, y: input.frame.minY - 54, width: 42, height: 42)
+        reactionFluid.frame = CGRect(x: 0, y: topInset, width: width, height: max(0, messageAreaBottom - topInset))
+        scrollDown.frame = CGRect(x: width - 54, y: messageAreaBottom - 54, width: 42, height: 42)
+        updateNextChannelIndicator(feedback: false)
         if !didScrollToBottom, input.frame.height > 0 {
             didScrollToBottom = true
             table.layoutIfNeeded()
             scrollToBottom(animated: false)
             DispatchQueue.main.async { self.initialPosition() }
-        } else if wasAtBottom {
+        } else if wasAtBottom, !channelTransitioning, !table.isDragging, !table.isDecelerating {
             scrollToBottom(animated: false)
         }
     }
 
     /// Opens at the unread band (like Telegram) or at the bottom, once the bars have their size.
     private func initialPosition() {
-        if let divider = dividerPath {
+        if chat.kind == .channel, let state = home?.channelReadingStates[channelAccount]?[chat.id] {
+            restoreChannelPosition(state)
+        } else if let divider = dividerPath {
             let bandTop = table.rectForRow(at: divider).minY - table.contentInset.top - 40
             let bottom = table.contentSize.height - table.bounds.height + table.contentInset.bottom
             table.contentOffset.y = max(-table.contentInset.top, min(bandTop, bottom))
@@ -434,6 +515,8 @@ final class MTChatViewController: UIViewController {
                 guard let self, let path = self.dividerPath else { return }
                 (self.table.cellForRow(at: path) as? MTMessageCell)?.pulseDivider()
             }
+        } else if chat.kind == .channel {
+            table.contentOffset.y = -table.contentInset.top
         } else {
             scrollToBottom(animated: false)
         }
@@ -459,7 +542,7 @@ final class MTChatViewController: UIViewController {
     }
 
     private func setStatus(typing: Bool) {
-        let text = typing ? "печатает" : (chat.online ? "в сети" : (chat.kind == .channel ? "1 248 подписчиков" : "был(а) недавно"))
+        let text = typing ? "typing" : (chat.online ? "online" : (chat.kind == .channel ? "1,248 subscribers" : "last seen recently"))
         UIView.transition(with: statusLabel, duration: 0.2, options: .transitionCrossDissolve) {
             self.statusLabel.text = text
             self.statusLabel.textColor = typing || self.chat.online ? MTPalette.accent : MTPalette.secondary
@@ -495,6 +578,7 @@ final class MTChatViewController: UIViewController {
 
     /// Runs of one sender's messages are joined; the band and day breaks split them.
     private func style(at path: IndexPath) -> MTBubbleStyle {
+        if chat.kind == .channel { return MTBubbleStyle(outgoing: false) }
         let messages = sections[path.section].messages
         let current = messages[path.row]
         func joins(_ other: MTMessage?) -> Bool {
@@ -531,7 +615,7 @@ final class MTChatViewController: UIViewController {
             finishEditing(editingID, text: text)
             return
         }
-        let quote = replyTo.map { MTMessage.Quote(name: $0.outgoing ? "Вы" : chat.person.name, text: $0.summary) }
+        let quote = replyTo.map { MTMessage.Quote(name: $0.outgoing ? "You" : chat.person.name, text: $0.summary) }
         let start = input.fieldFrame(in: view)
         let link = input.linkPreview
         clearComposerMode()
@@ -539,15 +623,22 @@ final class MTChatViewController: UIViewController {
         message.reply = quote
         message.link = link
         append(message, flyFrom: start)
-        expectAnswer(to: message.id)
         if let effect = MTMessageEffect.effect(for: text) { playEffect(effect, on: message.id, delay: 0.45) }
     }
 
     /// The sticker leaves the suggestions strip and flies to its place in the chat, straightening up.
     private func sendSticker(_ sticker: String, from cell: UIImageView) {
+        let message = MTMessage(kind: .sticker(sticker), outgoing: true, time: now, read: false)
+        storageSession?.save(message, chatID: chat.id, origin: storageOrigin, completion: { [weak self] in
+            guard let self else { return }
+            self.committed { self.animateSticker(message, from: cell) }
+        })
+    }
+
+    private func animateSticker(_ message: MTMessage, from cell: UIImageView) {
+        guard case .sticker(let sticker) = message.kind else { return }
         let start = cell.convert(cell.bounds, to: view)
         let tilt = atan2(cell.transform.b, cell.transform.a)
-        let message = MTMessage(kind: .sticker(sticker), outgoing: true, time: now, read: false)
         append(message, animated: false)
         guard let target = self.cell(for: message.id)?.bubble else { return }
         let end = target.convert(target.bounds, to: view)
@@ -566,7 +657,6 @@ final class MTChatViewController: UIViewController {
             target.alpha = 1
             flyer.removeFromSuperview()
         })
-        expectAnswer(to: message.id)
     }
 
     /// The full-screen burst for 🎉 ❤️ 👍 🔥, out of the message's bubble.
@@ -580,37 +670,23 @@ final class MTChatViewController: UIViewController {
     private func send(_ kind: MTMessage.Kind) {
         let message = MTMessage(kind: kind, outgoing: true, time: now, read: false)
         append(message)
-        expectAnswer(to: message.id)
-    }
-
-    /// ✓ → ✓✓, then their typing bubble, then the answer growing out of it.
-    private func expectAnswer(to id: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { [weak self] in
-            guard let self, let path = self.indexPath(of: id) else { return }
-            self.sections[path.section].messages[path.row].read = true
-            self.cell(for: id)?.bubble?.setRead(true)
-            self.setStatus(typing: true)
-            self.showTyping()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) { [weak self] in
-            guard let self else { return }
-            self.setStatus(typing: false)
-            let answers = ["Супер! 🔥", "Ага, понял", "Ахаха 😂", "Круто выглядит, давай ещё анимаций", "Окей 👌"]
-            self.append(MTMessage(kind: .text(answers.randomElement()!), outgoing: false, time: self.now), fromTyping: true)
-        }
-    }
-
-    private func showTyping() {
-        guard typingFooter == nil else { return }
-        let footer = MTTypingFooter(frame: CGRect(x: 0, y: 0, width: table.bounds.width, height: 46))
-        let wasAtBottom = distanceFromBottom < 80
-        table.tableFooterView = footer
-        typingFooter = footer
-        footer.appear()
-        if wasAtBottom { scrollToBottom(animated: true) }
     }
 
     private func append(_ message: MTMessage, flyFrom start: CGRect? = nil, fromTyping: Bool = false, animated: Bool = true) {
+        if !applyingStoredChange {
+            storageSession?.save(message, chatID: chat.id, origin: storageOrigin, onFailure: { [weak self] in
+                if let text = message.text { self?.input.setText(text, editing: false) }
+            }) { [weak self] in
+                guard let self else { return }
+                self.committed { self.append(message, flyFrom: start, fromTyping: fromTyping, animated: animated) }
+            }
+            return
+        }
+        let title = MTStorageMapping.day(message.timestamp)
+        if sections.last?.title != title {
+            sections.append((title, []))
+            table.insertSections(IndexSet(integer: sections.count - 1), with: .none)
+        }
         let wasAtBottom = distanceFromBottom < 80
         if fromTyping {
             table.tableFooterView = nil
@@ -708,6 +784,16 @@ final class MTChatViewController: UIViewController {
 
     /// Adds `emoji` from a point in this view, or removes an existing reaction.
     private func toggleReaction(_ emoji: String, on id: Int, from point: CGPoint?) {
+        if !applyingStoredChange {
+            storageSession?.mutateMessage(chatID: chat.id, messageID: id, origin: storageOrigin, change: { value in
+                if value.reactions.contains(emoji) { value.reactions.removeAll { $0 == emoji } }
+                else { value.reactions = [emoji] + value.reactions.filter { $0 != emoji }.prefix(2) }
+            }) { [weak self] in
+                guard let self else { return }
+                self.committed { self.toggleReaction(emoji, on: id, from: point) }
+            }
+            return
+        }
         guard let path = indexPath(of: id) else { return }
         var message = message(at: path)
         let adding = !message.reactions.contains(emoji)
@@ -927,12 +1013,20 @@ final class MTChatViewController: UIViewController {
     private func openMenu(for id: Int) {
         guard let cell = cell(for: id), let bubble = cell.bubble, let message = cell.message else { return }
         view.endEditing(true)
-        var actions: [(String, String, MTMessageMenu.Action)] = [("Ответить", "arrowshape.turn.up.left", .reply)]
-        if message.text != nil { actions.append(("Копировать", "doc.on.doc", .copy)) }
-        if message.outgoing, message.text != nil { actions.append(("Изменить", "pencil", .edit)) }
-        actions += [("Переслать", "arrowshape.turn.up.right", .forward),
-                    ("Исчезнуть через 5 с", "timer", .vanish), ("Выделить", "checkmark.circle", .select),
-                    ("Удалить", "trash", .delete)]
+        if chat.kind == .channel {
+            var actions: [(String, String, MTMessageMenu.Action)] = [("Forward", "arrowshape.turn.up.right", .forward)]
+            if message.text != nil { actions.insert(("Copy", "doc.on.doc", .copy), at: 0) }
+            let menu = MTMessageMenu(in: view, bubble: bubble, outgoing: false, actions: actions)
+            menu.onReaction = { [weak self] emoji, point in self?.toggleReaction(emoji, on: id, from: point) }
+            menu.onAction = { [weak self] action in self?.perform(action, on: id) }
+            return
+        }
+        var actions: [(String, String, MTMessageMenu.Action)] = [("Reply", "arrowshape.turn.up.left", .reply)]
+        if message.text != nil { actions.append(("Copy", "doc.on.doc", .copy)) }
+        if message.outgoing, message.text != nil { actions.append(("Edit", "pencil", .edit)) }
+        actions += [("Forward", "arrowshape.turn.up.right", .forward),
+                    ("Disappear in 5s", "timer", .vanish), ("Select", "checkmark.circle", .select),
+                    ("Delete", "trash", .delete)]
         let menu = MTMessageMenu(in: view, bubble: bubble, outgoing: message.outgoing, actions: actions)
         menu.onReaction = { [weak self] emoji, point in self?.toggleReaction(emoji, on: id, from: point) }
         menu.onAction = { [weak self] action in self?.perform(action, on: id) }
@@ -946,15 +1040,18 @@ final class MTChatViewController: UIViewController {
             startReply(to: id)
         case .copy:
             UIPasteboard.general.string = message.text
-            MTViews.toast("Скопировано", symbol: "doc.on.doc.fill", in: view, top: pinned.frame.maxY + 8)
+            MTViews.toast("Copied", symbol: "doc.on.doc.fill", in: view, top: pinned.frame.maxY + 8)
         case .edit:
             editingID = id
             replyTo = nil
-            input.showPanel(symbol: "pencil", title: "Редактирование", text: message.summary)
+            input.showPanel(symbol: "pencil", title: "Editing", text: message.summary)
             input.setText(message.text ?? "", editing: true)
             cell(for: id)?.bubble?.flash()
         case .forward:
-            MTViews.toast("Переслано в «Избранное»", symbol: "arrowshape.turn.up.right.fill", in: view, top: pinned.frame.maxY + 8)
+            storageSession?.forward(message, from: chat.person.name, to: ChannelPerson(name: "Saved Messages", hue: 0.58)) { [weak self] in
+                guard let self else { return }
+                MTViews.toast("Forwarded to Saved Messages", symbol: "arrowshape.turn.up.right.fill", in: self.view, top: self.pinned.frame.maxY + 8)
+            }
         case .vanish:
             let deadline = Date().addingTimeInterval(Self.vanishAfter)
             expiring[id] = deadline
@@ -973,7 +1070,7 @@ final class MTChatViewController: UIViewController {
         let message = message(at: path)
         replyTo = message
         editingID = nil
-        input.showPanel(symbol: "arrowshape.turn.up.left", title: message.outgoing ? "Вы" : chat.person.name, text: message.summary)
+        input.showPanel(symbol: "arrowshape.turn.up.left", title: message.outgoing ? "You" : chat.person.name, text: message.summary)
         input.focus()
         cell(for: id)?.bubble?.flash()
     }
@@ -987,6 +1084,15 @@ final class MTChatViewController: UIViewController {
     }
 
     private func finishEditing(_ id: Int, text: String) {
+        if !applyingStoredChange {
+            storageSession?.mutateMessage(chatID: chat.id, messageID: id, origin: storageOrigin, change: { value in
+                value.kind = .text(text); value.edited = true
+            }) { [weak self] in
+                guard let self else { return }
+                self.committed { self.finishEditing(id, text: text) }
+            }
+            return
+        }
         clearComposerMode()
         input.setText("", editing: false)
         guard let path = indexPath(of: id) else { return }
@@ -1027,12 +1133,19 @@ final class MTChatViewController: UIViewController {
 
     private func updateSelectionTitle() {
         UIView.transition(with: selectionTitle, duration: 0.15, options: .transitionCrossDissolve) {
-            self.selectionTitle.text = "Выбрано: \(self.selectedIDs.count)"
+            self.selectionTitle.text = "Selected: \(self.selectedIDs.count)"
         }
     }
 
     /// A timed-out message melts upward into haze (dust with convection), then its row closes.
     private func evaporate(_ id: Int) {
+        if !applyingStoredChange {
+            storageSession?.delete(chatID: chat.id, ids: [id], origin: storageOrigin) { [weak self] in
+                guard let self else { return }
+                self.committed { self.evaporate(id) }
+            }
+            return
+        }
         expiring[id] = nil
         guard let path = indexPath(of: id) else { return }
         let finish = {
@@ -1058,7 +1171,7 @@ final class MTChatViewController: UIViewController {
 
     private func buildSearch() {
         searchBar.addSubview(MTViews.barBackground())
-        searchField.placeholder = "Поиск в чате"
+        searchField.placeholder = "Search in chat"
         searchField.backgroundColor = MTPalette.fill
         searchField.layer.cornerRadius = 10
         searchField.textColor = MTPalette.text
@@ -1073,7 +1186,7 @@ final class MTChatViewController: UIViewController {
         searchField.addAction(UIAction { [weak self] _ in self?.searchChanged() }, for: .editingChanged)
         searchBar.addSubview(searchField)
         let cancel = UIButton(type: .system)
-        cancel.setTitle("Отмена", for: .normal)
+        cancel.setTitle("Cancel", for: .normal)
         cancel.titleLabel?.font = .systemFont(ofSize: 17)
         cancel.tintColor = MTPalette.accent
         cancel.tag = 1
@@ -1101,7 +1214,7 @@ final class MTChatViewController: UIViewController {
     private func startSearch() {
         searchQuery = ""
         matches = []
-        resultsCounter.setText("Введите запрос", animated: false)
+        resultsCounter.setText("Enter a search query", animated: false)
         view.setNeedsLayout()
         UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
             self.searchBar.alpha = 1
@@ -1144,7 +1257,7 @@ final class MTChatViewController: UIViewController {
     }
 
     private func updateResultsCounter(up: Bool) {
-        let text = searchQuery?.isEmpty != false ? "Введите запрос" : matches.isEmpty ? "Не найдено" : "\(currentMatch + 1) из \(matches.count)"
+        let text = searchQuery?.isEmpty != false ? "Enter a search query" : matches.isEmpty ? "No results" : "\(currentMatch + 1) of \(matches.count)"
         resultsCounter.setText(text, animated: true, up: up)
         view.setNeedsLayout()
     }
@@ -1232,11 +1345,18 @@ final class MTChatViewController: UIViewController {
         guard let photos = cell(for: id)?.bubble as? MTPhotosBubble, let path = indexPath(of: id) else { return }
         view.endEditing(true)
         _ = MTPhotoViewer(in: view, sources: photos.images, start: index,
-                          title: "\(message(at: path).outgoing ? "Вы" : chat.person.name), \(message(at: path).time)")
+                          title: "\(message(at: path).outgoing ? "You" : chat.person.name), \(message(at: path).time)")
     }
 
     /// Bubbles crumble one after another, then their rows close up.
     private func delete(_ ids: Set<Int>) {
+        if !applyingStoredChange {
+            storageSession?.delete(chatID: chat.id, ids: ids, origin: storageOrigin) { [weak self] in
+                guard let self else { return }
+                self.committed { self.delete(ids) }
+            }
+            return
+        }
         let paths = ids.compactMap { indexPath(of: $0) }.sorted()
         guard !paths.isEmpty else { return }
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
@@ -1277,7 +1397,7 @@ final class MTChatViewController: UIViewController {
 
     /// Shows the newest pin above the top of the screen; when none is above, the newest overall.
     private func updatePinned() {
-        guard !jumpingToPin else { return }
+        guard chat.kind != .channel, !jumpingToPin else { return }
         let topY = table.contentOffset.y + table.contentInset.top
         let paths = pinnedPaths
         var shown = paths.count - 1
@@ -1376,8 +1496,14 @@ extension MTChatViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "message", for: indexPath) as! MTMessageCell
         let message = message(at: indexPath)
+        if chat.kind == .channel, message.channelPost != nil {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "channelPost", for: indexPath) as! MTChannelPostCell
+            cell.configure(message, channel: chat.person)
+            if let post = cell.postView { bindChannelPost(post, messageID: message.id) }
+            return cell
+        }
+        let cell = tableView.dequeueReusableCell(withIdentifier: "message", for: indexPath) as! MTMessageCell
         let id = message.id
         cell.configure(message, style: style(at: indexPath), selecting: selecting, selected: selectedIDs.contains(id))
         updateReactionChips(in: cell)
@@ -1386,7 +1512,13 @@ extension MTChatViewController: UITableViewDataSource, UITableViewDelegate {
             self.toggleReaction("❤️", on: id, from: cell.convert(point, to: self.view))
         }
         cell.onLongPress = { [weak self] in self?.openMenu(for: id) }
-        cell.onReply = { [weak self] in self?.startReply(to: id) }
+        cell.onReply = { [weak self] in
+            guard let self, self.chat.kind != .channel else { return }
+            self.startReply(to: id)
+        }
+        cell.onReplySwipe = { [weak self] bubble, pull, snapped in
+            self?.replySwipeEffect.update(bubble: bubble, pull: pull, snapped: snapped)
+        }
         cell.onReaction = { [weak self] emoji in self?.toggleReaction(emoji, on: id, from: nil) }
         cell.onPhoto = { [weak self] index, _ in self?.openPhotos(id, index: index) }
         if let deadline = expiring[id] { cell.showCountdown(until: deadline, total: Self.vanishAfter) }
@@ -1397,7 +1529,15 @@ extension MTChatViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        MTMessageCell.height(message(at: indexPath), style: style(at: indexPath), width: tableView.bounds.width)
+        let message = message(at: indexPath)
+        if let post = message.channelPost {
+            let width = tableView.bounds.width
+            if let cached = channelPostHeights[message.id], cached.width == width { return cached.height }
+            let height = MTChannelPostCell.height(for: post, channel: chat.person, width: width)
+            channelPostHeights[message.id] = (width, height)
+            return height
+        }
+        return MTMessageCell.height(message, style: style(at: indexPath), width: tableView.bounds.width)
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -1422,18 +1562,42 @@ extension MTChatViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if scrollView.isDragging, hasOlderHistory, !loadingOlder,
+           scrollView.contentOffset.y < -scrollView.contentInset.top + 40,
+           sections.reduce(0, { $0 + $1.messages.count }) >= 500 {
+            loadingOlder = true
+            let count = sections.reduce(0) { $0 + $1.messages.count }
+            let oldHeight = table.contentSize.height
+            let oldOffset = table.contentOffset
+            storageSession?.loadOlder(chatID: chat.id) { [weak self] in
+                guard let self else { return }
+                self.reloadStoredHistory()
+                self.hasOlderHistory = self.sections.reduce(0, { $0 + $1.messages.count }) > count
+                self.table.contentOffset.y = oldOffset.y + self.table.contentSize.height - oldHeight
+                self.loadingOlder = false
+            }
+        }
         guard didScrollToBottom else { return }
         updatePinned()
+        updateNextChannelIndicator(feedback: scrollView.isDragging)
         if scrollView.isDragging || scrollView.isDecelerating { showDates() }
         scrollDown.setShown(distanceFromBottom > 220)
         // Pulling the chat down past its first message opens the mini profile.
-        if scrollView.isDragging, headerExpansion == 0, scrollView.contentOffset.y < -scrollView.contentInset.top - 90 {
+        if chat.kind != .channel, scrollView.isDragging, headerExpansion == 0, scrollView.contentOffset.y < -scrollView.contentInset.top - 90 {
             setHeaderExpansion(1, animated: true)
         }
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         if headerExpansion > 0 { setHeaderExpansion(0, animated: true) }
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        guard nextChannelIndicator.armed, !channelTransitioning, let next = nextChannel else { return }
+        targetContentOffset.pointee.y = max(-table.contentInset.top,
+            table.contentSize.height - table.bounds.height + table.contentInset.bottom)
+        beginChannelTransition(to: next)
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -1445,37 +1609,395 @@ extension MTChatViewController: UITableViewDataSource, UITableViewDelegate {
     }
 }
 
+// MARK: - Telegram Post interactions (channels only)
+
+private extension MTChatViewController {
+    func bindChannelPost(_ post: ChannelPostView, messageID: Int) {
+        post.onLongPress = { [weak self] post, gesture in
+            self?.channelLongPress(post, messageID: messageID, gesture: gesture)
+        }
+        post.onDoubleTap = { [weak self] post, point in
+            guard let self else { return }
+            self.reactToChannelPost(post, messageID: messageID,
+                                   emoji: "❤️", from: post.convert(point, to: self.channelEffectsHost), heart: true)
+        }
+        post.onChipTap = { [weak self] post, chip in
+            guard let self else { return }
+            if chip.chosen {
+                chip.crumbleEmoji()
+                chip.set(count: max(0, chip.count - 1), chosen: false, animated: true)
+                if chip.count == 0 { post.chips.remove(chip) }
+                self.storeChannelPost(post, messageID: messageID)
+                self.resizeChannelPosts()
+            } else {
+                let point = post.chips.landingPoint(of: chip, in: self.channelEffectsHost)
+                self.reactToChannelPost(post, messageID: messageID, emoji: chip.emoji,
+                                         from: CGPoint(x: point.x, y: point.y - 70))
+            }
+        }
+        post.onStarsSent = { [weak self] post, _ in
+            guard let self else { return }
+            self.storeChannelPost(post, messageID: messageID)
+            self.wallpaper.pulse(from: post.bubble.convert(CGPoint(x: post.bubble.bounds.midX, y: post.bubble.bounds.maxY),
+                                                         to: self.wallpaper))
+            self.resizeChannelPosts()
+        }
+        post.onComments = { [weak self] post in
+            guard let self else { return }
+            self.channelComments?.removeFromSuperview()
+            let sheet = CommentsSheetOverlay(in: self.view, bubble: post.bubble, buttonPoint: post.commentsPoint(in: self.view),
+                                             count: post.post.comments, people: trickPeople)
+            sheet.onClose = { [weak self] in self?.channelComments = nil }
+            self.channelComments = sheet
+        }
+        post.onForward = { [weak self] post, gesture in
+            guard let self else { return }
+            switch gesture.state {
+            case .began:
+                self.channelForward?.removeFromSuperview()
+                self.channelForward = ForwardDropOverlay(in: self.view, button: post.forwardButton, post: post.bubble,
+                                                         people: Array(trickPeople.prefix(5)))
+                self.channelForward?.onSend = { [weak self] person, done in
+                    guard let self, let path = self.indexPath(of: messageID) else { return }
+                    self.storageSession?.forward(self.message(at: path), from: self.chat.person.name, to: person, completion: done)
+                }
+            case .changed:
+                self.channelForward?.move(to: gesture.location(in: self.view))
+            default:
+                self.channelForward?.release()
+            }
+        }
+    }
+
+    func channelLongPress(_ post: ChannelPostView, messageID: Int, gesture: UILongPressGestureRecognizer) {
+        guard !channelTransitioning else { return }
+        let point = gesture.location(in: view)
+        switch gesture.state {
+        case .began:
+            channelPicker?.removeFromSuperview()
+            let picker = ReactionPickerOverlay(in: view, bubble: post.bubble, at: point,
+                emojis: ["❤️", "👍", "🔥", "😁", "🙏", "👏", "🤯"],
+                more: ["😂", "🥰", "😍", "🤩", "😎", "🤔", "😱", "🥳",
+                       "😭", "🤝", "💯", "⚡", "🎉", "🙈", "😇", "🤗",
+                       "👀", "💔", "🤡", "🏆", "🍾", "🌚", "🥱", "🤓",
+                       "✍️", "💅", "🫡", "🦄", "🐳", "🍓", "🌭", "👻"])
+            picker.onChoice = { [weak self] choice in
+                guard let self else { return }
+                self.channelPicker = nil
+                switch choice {
+                case let .emoji(emoji, origin):
+                    guard let path = self.indexPath(of: messageID) else { return }
+                    if let current = (self.table.cellForRow(at: path) as? MTChannelPostCell)?.postView {
+                        self.reactToChannelPost(current, messageID: messageID, emoji: emoji,
+                                               from: self.view.convert(origin, to: self.channelEffectsHost))
+                    } else if var value = self.sections[path.section].messages[path.row].channelPost {
+                        if let index = value.reactions.firstIndex(where: { $0.emoji == emoji }) {
+                            if !value.reactions[index].chosen {
+                                value.reactions[index].count += 1
+                                value.reactions[index].chosen = true
+                            }
+                        } else {
+                            value.reactions.append(ChannelReaction(emoji: emoji, count: 1, chosen: true))
+                        }
+                        self.persistChannelValue(value, messageID: messageID)
+                    }
+                case .delete:
+                    self.deleteChannelPost(messageID)
+                case .dismissed: break
+                }
+            }
+            channelPicker = picker
+        case .changed: channelPicker?.move(to: point)
+        default: channelPicker?.release()
+        }
+    }
+
+    func reactToChannelPost(_ post: ChannelPostView, messageID: Int, emoji: String, from point: CGPoint, heart: Bool = false) {
+        guard indexPath(of: messageID) != nil, !channelTransitioning else { return }
+        let chip = post.chips.chip(for: emoji) ?? post.chips.insertChip(ChannelReaction(emoji: emoji, count: 0))
+        if !chip.chosen { chip.set(count: chip.count + 1, chosen: true, animated: true) }
+        chip.alpha = 1
+        // Commit before flight so scrolling, reuse, or switching cannot lose the user's choice.
+        storeChannelPost(post, messageID: messageID)
+        resizeChannelPosts()
+        guard !UIAccessibility.isReduceMotionEnabled else { chip.gulp(); return }
+        let channelID = chat.id
+        let target: () -> (point: CGPoint, chip: CGRect) = { [weak self, weak post, weak chip] in
+            guard let self, let post, let chip, self.chat.id == channelID, post.window != nil else { return (point, .zero) }
+            return (post.chips.landingPoint(of: chip, in: self.channelEffectsHost),
+                    chip.convert(chip.bounds, to: self.channelEffectsHost))
+        }
+        let landed: () -> Void = { [weak self, weak post, weak chip] in
+            guard let self, self.chat.id == channelID, post?.window != nil else { return }
+            chip?.gulp(0.3)
+            UIAccessibility.post(notification: .layoutChanged, argument: chip)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        if heart {
+            HeartPop.show(at: point, in: channelEffectsHost, target: { target().point }, arrive: landed)
+        } else {
+            ReactionFlight.fly(emoji, from: point, in: channelEffectsHost, liquid: channelReactionLiquid,
+                               target: target, landed: landed)
+        }
+    }
+
+    func storeChannelPost(_ post: ChannelPostView, messageID: Int) {
+        var value = post.currentPost
+        value.reactions.removeAll { $0.count == 0 }
+        persistChannelValue(value, messageID: messageID)
+    }
+
+    func persistChannelValue(_ value: ChannelPost, messageID: Int) {
+        let peerID = chat.id
+        storageSession?.mutateMessage(chatID: peerID, messageID: messageID, origin: storageOrigin,
+                                     change: { $0.channelPost = value }) { [weak self] in
+            guard let self, self.chat.id == peerID, let path = self.indexPath(of: messageID) else { return }
+            self.sections[path.section].messages[path.row].channelPost = value
+            self.channelPostHeights[messageID] = nil
+        }
+    }
+
+    func resizeChannelPosts() {
+        let keepBottom = isNearBottom
+        table.performBatchUpdates(nil) { [weak self] _ in
+            guard let self, keepBottom, let lastPath = self.lastPath else { return }
+            self.table.scrollToRow(at: lastPath, at: .bottom, animated: false)
+        }
+    }
+
+    func deleteChannelPost(_ messageID: Int) {
+        if !applyingStoredChange {
+            storageSession?.delete(chatID: chat.id, ids: [messageID], origin: storageOrigin) { [weak self] in
+                guard let self else { return }
+                self.committed { self.deleteChannelPost(messageID) }
+            }
+            return
+        }
+        guard let path = indexPath(of: messageID) else { return }
+        if UIAccessibility.isReduceMotionEnabled {
+            sections[path.section].messages.remove(at: path.row)
+            table.deleteRows(at: [path], with: .fade)
+        } else {
+            channelVacuum.deleteRow(at: path, in: table) { self.sections[path.section].messages.remove(at: path.row) }
+        }
+        saveChannelReadingPosition()
+    }
+
+    func stopChannelPostEffects() {
+        channelPicker?.removeFromSuperview()
+        channelPicker = nil
+        channelForward?.removeFromSuperview()
+        channelForward = nil
+        channelComments?.removeFromSuperview()
+        channelComments = nil
+        channelReactionLiquid.stop()
+        for child in channelEffectsHost.subviews where child !== channelReactionLiquid { child.removeFromSuperview() }
+    }
+}
+
+// MARK: - Channel reading and pull-to-next transition
+
+private extension MTChatViewController {
+    var nextChannel: MTChat? {
+        guard chat.kind == .channel, let home, home.currentAccount == channelAccount else { return nil }
+        let channels = home.chatList.channels
+        guard channels.count > 1, let current = channels.firstIndex(where: { $0.id == chat.id }) else { return nil }
+        return channels[(current + 1) % channels.count]
+    }
+
+    func configureChannelChrome() {
+        guard chat.kind == .channel else { return }
+        input.isHidden = true
+        pinned.isHidden = true
+        callButton.isHidden = true
+        backButton.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Next channel") { [weak self] _ in
+            guard let self, !self.channelTransitioning, let next = self.nextChannel else { return false }
+            self.beginChannelTransition(to: next)
+            return true
+        }]
+    }
+
+    func saveChannelReadingPosition() {
+        guard chat.kind == .channel, didScrollToBottom, let home else { return }
+        let bottom = max(0, table.contentSize.height - table.bounds.height + table.contentInset.top + table.contentInset.bottom)
+        let position = min(max(0, table.contentOffset.y + table.contentInset.top), bottom)
+        let top = table.contentOffset.y + table.contentInset.top
+        let anchor = (table.indexPathsForVisibleRows ?? []).sorted().first { path in
+            guard sections.indices.contains(path.section), sections[path.section].messages.indices.contains(path.row) else { return false }
+            return table.rectForRow(at: path).maxY > top
+        }
+        home.channelReadingStates[channelAccount, default: [:]][chat.id] = MTChannelReadingState(
+            sections: sections, position: position, anchorMessageID: anchor.map { message(at: $0).id },
+            anchorOffset: anchor.map { table.rectForRow(at: $0).minY - top } ?? 0, atBottom: distanceFromBottom < 40)
+        if let state = home.channelReadingStates[channelAccount]?[chat.id] {
+            storageSession?.savePosition(chatID: chat.id, state: state)
+        }
+    }
+
+    func restoreChannelPosition(_ state: MTChannelReadingState) {
+        if state.atBottom, let lastPath {
+            table.scrollToRow(at: lastPath, at: .bottom, animated: false)
+            table.layoutIfNeeded()
+            scrollToBottom(animated: false)
+            return
+        }
+        if let id = state.anchorMessageID, let path = indexPath(of: id) {
+            table.scrollToRow(at: path, at: .top, animated: false)
+            table.layoutIfNeeded()
+            let y = table.rectForRow(at: path).minY - table.contentInset.top - state.anchorOffset
+            table.setContentOffset(CGPoint(x: 0, y: max(-table.contentInset.top, y)), animated: false)
+            return
+        }
+        let position = state.position
+        let bottom = max(-table.contentInset.top, table.contentSize.height - table.bounds.height + table.contentInset.bottom)
+        table.setContentOffset(CGPoint(x: 0, y: min(bottom, max(-table.contentInset.top, position - table.contentInset.top))),
+                               animated: false)
+    }
+
+    func updateNextChannelIndicator(feedback: Bool) {
+        guard chat.kind == .channel, !channelTransitioning, !selecting, searchQuery == nil,
+              !UIAccessibility.isVoiceOverRunning else {
+            nextChannelIndicator.reset()
+            return
+        }
+        let bottom = max(-table.contentInset.top, table.contentSize.height - table.bounds.height + table.contentInset.bottom)
+        let pull = max(0, table.contentOffset.y - bottom)
+        nextChannelIndicator.frame = CGRect(x: 0, y: max(pinned.frame.maxY + 8, messageAreaBottom - pull - 4),
+                                            width: view.bounds.width, height: 102)
+        nextChannelIndicator.update(pull: pull, next: nextChannel, feedback: feedback)
+    }
+
+    func beginChannelTransition(to next: MTChat) {
+        guard !channelTransitioning, chat.kind == .channel, next.id != chat.id, view.window != nil else { return }
+        channelTransitioning = true
+        let origin = nextChannelIndicator.alpha > 0.1 ? nextChannelIndicator.avatarRect
+            : CGRect(x: view.bounds.midX - 22, y: messageAreaBottom - 54, width: 44, height: 44)
+        nextChannelIndicator.reset()
+        // Finish the drag callback before stopping deceleration and replacing its data source.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.channelTransitioning else { return }
+            guard self.view.window != nil else { self.stopChannelTransition(); return }
+            self.switchChannel(to: next, avatarOrigin: origin)
+        }
+    }
+
+    func switchChannel(to next: MTChat, avatarOrigin: CGRect) {
+        saveChannelReadingPosition()
+        stopChannelPostEffects()
+        stopReactionAnimations()
+        fadeWork?.cancel()
+        table.isScrollEnabled = false
+        let viewport = CGRect(x: 0, y: pinned.frame.maxY, width: view.bounds.width,
+                              height: max(0, messageAreaBottom - pinned.frame.maxY))
+        let old = table.resizableSnapshotView(from: table.convert(viewport, from: view), afterScreenUpdates: false,
+                                              withCapInsets: .zero)
+        let overlay = UIView(frame: viewport)
+        overlay.clipsToBounds = true
+        view.insertSubview(overlay, belowSubview: pinned)
+        channelTransitionOverlay = overlay
+
+        chat = next
+        sections = storageSession?.sections(for: next.id) ?? [("Today", [])]
+        hasOlderHistory = true
+        observeStoredHistory()
+        home?.chatList.markRead(next.id)
+        table.reloadData()
+        table.layoutIfNeeded()
+        initialPosition()
+        nameLabel.text = next.person.name
+        avatar.set(next.person, size: 38)
+        avatar.online = false
+        setStatus(typing: false)
+        layoutHeader()
+
+        let incoming = table.resizableSnapshotView(from: table.convert(viewport, from: view), afterScreenUpdates: true,
+                                                   withCapInsets: .zero)
+        for snapshot in [old, incoming].compactMap({ $0 }) {
+            snapshot.frame = overlay.bounds
+            overlay.addSubview(snapshot)
+        }
+        let reducedMotion = UIAccessibility.isReduceMotionEnabled
+        table.alpha = incoming == nil ? 1 : 0
+        incoming?.alpha = 0
+        if !reducedMotion { incoming?.transform = CGAffineTransform(translationX: 0, y: viewport.height * 0.6) }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        if !reducedMotion {
+            let flyer = UIImageView(image: ChannelAvatar.image(for: next.person, size: 44))
+            flyer.frame = avatarOrigin
+            view.addSubview(flyer)
+            channelAvatarFlyer = flyer
+            avatar.alpha = 0
+            UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0) {
+                flyer.frame = self.avatar.convert(self.avatar.bounds, to: self.view)
+            } completion: { [weak self] _ in
+                flyer.removeFromSuperview()
+                self?.avatar.alpha = 1
+            }
+        }
+        UIView.animate(withDuration: reducedMotion ? 0.2 : 0.45, delay: 0, options: .curveEaseIn) {
+            if !reducedMotion {
+                old?.transform = CGAffineTransform(translationX: 0, y: -viewport.height * 0.4).scaledBy(x: 0.92, y: 0.92)
+            }
+            old?.alpha = 0
+        }
+        UIView.animate(withDuration: reducedMotion ? 0.2 : 0.7, delay: reducedMotion ? 0 : 0.1,
+                       usingSpringWithDamping: 0.78, initialSpringVelocity: 0.2) {
+            incoming?.transform = .identity
+            incoming?.alpha = 1
+        } completion: { [weak self] _ in
+            guard let self, self.channelTransitionOverlay === overlay else { return }
+            self.stopChannelTransition()
+            self.saveChannelReadingPosition()
+            UIAccessibility.post(notification: .screenChanged, argument: self.nameLabel)
+        }
+    }
+
+    func stopChannelTransition() {
+        channelTransitionOverlay?.removeFromSuperview()
+        channelTransitionOverlay = nil
+        channelAvatarFlyer?.removeFromSuperview()
+        channelAvatarFlyer = nil
+        channelTransitioning = false
+        avatar.alpha = 1
+        table.alpha = 1
+        table.isScrollEnabled = true
+        nextChannelIndicator.reset()
+    }
+}
+
 // MARK: - Script
 
 enum MTChatScript {
     static func sections(for chat: MTChat) -> [(title: String, messages: [MTMessage])] {
+        if chat.kind == .channel { return MTData.channelSections(for: chat) }
         if chat.id == MTChat.fluidReactionsDemo.id {
-            return [("Сегодня", [
-                MTMessage(kind: .text("Дважды нажми на сообщение — розовый поток обтечёт пузырьки и соберётся в ❤️."),
+            return [("Today", [
+                MTMessage(kind: .text("Double-tap a message and the pink stream will flow around the bubbles and form a ❤️."),
                           outgoing: false, time: "12:00"),
-                MTMessage(kind: .text("Удерживай сообщение и выбери 🔥 или 👍, чтобы смешать цвета."),
+                MTMessage(kind: .text("Hold a message and choose 🔥 or 👍 to mix the colors."),
                           outgoing: true, time: "12:01"),
-                MTMessage(kind: .text("Проведи пальцем по краске. Сообщения — препятствия для жидкости 💧"),
+                MTMessage(kind: .text("Swipe through the paint. Messages act as obstacles for the fluid 💧"),
                           outgoing: false, time: "12:02"),
             ])]
         }
-        let days = ["18 октября", "20 октября", "Вчера", "Сегодня"]
+        let days = ["October 18", "October 20", "Yesterday", "Today"]
         let lines: [[(String, Bool)]] = [
-            [("Привет! Видел новый дизайн Telegram?", false), ("Да, таб-бар со стеклом шикарный", true),
-             ("И капля, которая перетекает между вкладками 😍", false), ("Хочу такое в нашем демо", true),
-             ("📌 Правила чата: без спама", false), ("Давай соберём мини-Telegram", false),
-             ("Ок, начну с историй в навбаре", true), ("👍", false)],
-            [("Как успехи?", false), ("Истории уже растекаются при оттягивании", true),
-             ("Ссылка на макеты в Figma", false), ("Скинь видео!", false), ("Вечером", true),
-             ("Кстати, свайпы по чатам тоже сделай", false), ("Уже в списке", true),
-             ("И чтобы удаление рассыпалось пылью ✨", false), ("Будет", true)],
-            [("Созвон по пятницам в 11:00", false), ("Помню", true), ("Покажешь запись голосового с замком?", false),
-             ("Да, тяни микрофон вверх — запись фиксируется", true), ("А влево — отмена в корзину", true),
-             ("Огонь 🔥", false), ("Ещё сетка медиа по щипку", true), ("Как в галерее iOS?", false),
-             ("Да, 3 → 5 колонок, ячейки перетекают", true)],
-            [("Релиз 2.0 — 1 ноября 🚀", false), ("Спойлер: ||в релизе будет жидкий таб-бар 🤫||", false),
-             ("Успеем?", false), ("Должны 😅", true),
-             (chat.message.isEmpty ? "Напиши, как будет готово" : chat.message, false)],
+            [("Hey! Have you seen Telegram’s new design?", false), ("Yes, the glass tab bar looks amazing", true),
+             ("And the drop that flows between tabs 😍", false), ("I want that in our demo", true),
+             ("📌 Chat rules: no spam", false), ("Let’s build a mini-Telegram", false),
+             ("Okay, I’ll start with stories in the nav bar", true), ("👍", false)],
+            [("How’s it going?", false), ("Stories already flow out when pulled", true),
+             ("Link to the Figma designs", false), ("Send me a video!", false), ("Tonight", true),
+             ("Add chat swipes too, by the way", false), ("Already on the list", true),
+             ("And make deletion dissolve into dust ✨", false), ("Will do", true)],
+            [("Friday call at 11:00", false), ("I remember", true), ("Can you show the locked voice recording?", false),
+             ("Yes, drag the mic up to lock the recording", true), ("Swipe left to cancel and discard", true),
+             ("Awesome 🔥", false), ("Also, pinch to change the media grid", true), ("Like in the iOS Photos app?", false),
+             ("Yes, 3 → 5 columns, with flowing cells", true)],
+            [("Release 2.0 — November 1 🚀", false), ("Spoiler: ||the release will have a fluid tab bar 🤫||", false),
+             ("Will we make it?", false), ("We should 😅", true),
+             (chat.message.isEmpty ? "Message me when it’s ready" : chat.message, false)],
         ]
         var pin = 0
         var result: [(String, [MTMessage])] = []
@@ -1490,10 +2012,10 @@ enum MTChatScript {
                 }
                 messages.append(message)
             }
-            if day == "20 октября" {
+            if day == "October 20" {
                 messages.insert(MTMessage(kind: .photos([.sunset, .ocean, .city]), outgoing: false, time: "12:30"), at: 4)
             }
-            if day == "Вчера" {
+            if day == "Yesterday" {
                 messages.insert(MTMessage(kind: .voice(9), outgoing: true, time: "14:02"), at: 5)
             }
             result.append((day, messages))
@@ -1522,7 +2044,7 @@ final class MTVoiceRecorder: UIView {
     private let panel = UIView()
     private let dot = UIView()
     private let timeLabel = MTViews.label(size: 15, weight: .medium)
-    private let slideLabel = MTViews.label("‹ Влево — отмена", size: 15, color: MTPalette.secondary)
+    private let slideLabel = MTViews.label("‹ Swipe left to cancel", size: 15, color: MTPalette.secondary)
     private let cancelButton = UIButton(type: .system)
 
     private var speech = SpeechSimulator(energy: 0.9)
@@ -1560,7 +2082,7 @@ final class MTVoiceRecorder: UIView {
         slideLabel.textAlignment = .center
         slideLabel.frame = CGRect(x: 110, y: 0, width: bar.width - 220, height: 52)
         panel.addSubview(slideLabel)
-        cancelButton.setTitle("Отмена", for: .normal)
+        cancelButton.setTitle("Cancel", for: .normal)
         cancelButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         cancelButton.tintColor = MTPalette.accent
         cancelButton.frame = slideLabel.frame
@@ -1661,7 +2183,7 @@ final class MTVoiceRecorder: UIView {
         if elapsed < 0.6 {
             cancel(silent: true)
             if let host = superview {
-                MTViews.toast("Удерживайте, чтобы записать", symbol: video ? "video.fill" : "mic.fill", in: host,
+                MTViews.toast("Hold to record", symbol: video ? "video.fill" : "mic.fill", in: host,
                               top: host.safeAreaInsets.top + 110)
             }
             return

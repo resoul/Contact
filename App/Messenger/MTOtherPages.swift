@@ -83,7 +83,7 @@ final class MTContactsPage: MTListPage {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        titleLabel.text = "Контакты"
+        titleLabel.text = "Contacts"
         table.accessibilityIdentifier = "contact.contacts"
     }
 
@@ -92,7 +92,7 @@ final class MTContactsPage: MTListPage {
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let person = people[indexPath.row]
         let online = indexPath.row % 3 == 0
-        return personCell(person, subtitle: online ? "в сети" : "был(а) \(indexPath.row + 2) мин назад",
+        return personCell(person, subtitle: online ? "online" : "last seen \(indexPath.row + 2) min ago",
                           subtitleColor: online ? MTPalette.accent : MTPalette.secondary, online: online)
     }
 
@@ -114,10 +114,10 @@ final class MTCallsPage: MTListPage {
 
     private let all: [Call] = trickPeople.enumerated().map { index, person in
         Call(person: person, kind: index % 3 == 2 ? 2 : index % 2, video: index % 4 == 1,
-             time: ["21:10", "19:42", "Вчера", "Вчера", "Пн", "Вс", "Сб", "12.10", "10.10", "08.10"][index])
+             time: ["21:10", "19:42", "Yesterday", "Yesterday", "Mon", "Sun", "Sat", "12.10", "10.10", "08.10"][index])
     }
     private var shown: [Call] = []
-    private let segment = LiquidSelector(titles: ["Все", "Пропущенные"], style: .segments, liquid: MTPalette.accent,
+    private let segment = LiquidSelector(titles: ["All", "Missed"], style: .segments, liquid: MTPalette.accent,
                                          selectedTint: .white, normalTint: MTPalette.secondary)
 
     override var barExtra: CGFloat { 0 }
@@ -153,7 +153,7 @@ final class MTCallsPage: MTListPage {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let call = shown[indexPath.row]
-        let subtitle = ["↙︎ Входящий", "↗︎ Исходящий", "↙︎ Пропущенный"][call.kind] + (call.video ? " видеозвонок" : "")
+        let subtitle = ["↙︎ Incoming", "↗︎ Outgoing", "↙︎ Missed"][call.kind] + (call.video ? " video call" : "")
         let cell = personCell(call.person, subtitle: subtitle, titleColor: call.kind == 2 ? MTPalette.red : MTPalette.text)
         let time = MTViews.label(call.time, size: 14, color: MTPalette.secondary)
         time.sizeToFit()
@@ -217,12 +217,12 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
         phoneLabel.textAlignment = .center
         headerView.addSubview(phoneLabel)
 
-        themeButton.accessibilityLabel = "Сменить тему"
+        themeButton.accessibilityLabel = "Change theme"
         themeButton.accessibilityIdentifier = "contact.theme"
         themeButton.tintColor = MTPalette.accent
         themeButton.addAction(UIAction { [weak self] _ in self?.toggleTheme() }, for: .touchUpInside)
         view.addSubview(themeButton)
-        editButton.setTitle("Изм.", for: .normal)
+        editButton.setTitle("Edited", for: .normal)
         editButton.titleLabel?.font = .systemFont(ofSize: 17)
         editButton.tintColor = MTPalette.accent
         view.addSubview(editButton)
@@ -260,25 +260,25 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
             }
         }
         if home.accountCount < MTData.accounts.count {
-            accounts.append(Row(title: "Добавить аккаунт", symbol: "plus", color: MTPalette.accent, action: .add))
+            accounts.append(Row(title: "Add account", symbol: "plus", color: MTPalette.accent, action: .add))
         }
         sections = [
             accounts,
-            [Row(title: "Мой профиль", symbol: "person.crop.circle.fill", color: MTPalette.red, action: .profile),
-             Row(title: "Избранное", symbol: "bookmark.fill", color: MTPalette.accent, action: .saved),
-             Row(title: "Недавние звонки", symbol: "phone.fill", color: MTPalette.online, action: .calls),
-             Row(title: "Устройства", symbol: "laptopcomputer", color: MTPalette.orange, detail: "3", action: .devices),
-             Row(title: "Папки с чатами", symbol: "folder.fill", color: UIColor(red: 0.2, green: 0.7, blue: 0.9, alpha: 1),
+            [Row(title: "My Profile", symbol: "person.crop.circle.fill", color: MTPalette.red, action: .profile),
+             Row(title: "Saved Messages", symbol: "bookmark.fill", color: MTPalette.accent, action: .saved),
+             Row(title: "Recent Calls", symbol: "phone.fill", color: MTPalette.online, action: .calls),
+             Row(title: "Devices", symbol: "laptopcomputer", color: MTPalette.orange, detail: "3", action: .devices),
+             Row(title: "Chat Folders", symbol: "folder.fill", color: UIColor(red: 0.2, green: 0.7, blue: 0.9, alpha: 1),
                  action: .folders)],
-            [Row(title: "Уведомления и звуки", symbol: "bell.badge.fill", color: MTPalette.red, action: .notifications),
-             Row(title: "Конфиденциальность", symbol: "lock.fill", color: UIColor(white: 0.55, alpha: 1), action: .privacy),
-             Row(title: "Код-пароль", symbol: "lock.shield.fill", color: MTPalette.online,
-                 detail: home.passcodeEnabled ? "Вкл." : "Выкл.", action: .passcode),
-             Row(title: "Оформление", symbol: "paintbrush.fill", color: MTPalette.accent,
-                 detail: home.isDark ? "Ночная" : "Дневная", action: .theme),
-             Row(title: "Язык", symbol: "globe", color: UIColor(red: 0.6, green: 0.35, blue: 0.9, alpha: 1), detail: "Русский",
+            [Row(title: "Notifications and Sounds", symbol: "bell.badge.fill", color: MTPalette.red, action: .notifications),
+             Row(title: "Privacy", symbol: "lock.fill", color: UIColor(white: 0.55, alpha: 1), action: .privacy),
+             Row(title: "Passcode", symbol: "lock.shield.fill", color: MTPalette.online,
+                 detail: home.passcodeEnabled ? "On" : "Off", action: .passcode),
+             Row(title: "Appearance", symbol: "paintbrush.fill", color: MTPalette.accent,
+                 detail: home.isDark ? "Night" : "Day", action: .theme),
+             Row(title: "Language", symbol: "globe", color: UIColor(red: 0.6, green: 0.35, blue: 0.9, alpha: 1), detail: "English",
                  action: .language)],
-            [Row(title: "О Contact", symbol: "info.circle", color: MTPalette.accent, action: .about)],
+            [Row(title: "About Contact", symbol: "info.circle", color: MTPalette.accent, action: .about)],
         ]
         table.reloadData()
     }
@@ -357,11 +357,11 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.reload() }
             }
         case .about:
-            let alert = UIAlertController(title: "Contact", message: "Прототип мессенджера · 1.0\nЧаты и звонки пока работают локально.", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "Готово", style: .default))
+            let alert = UIAlertController(title: "Contact", message: "Messenger prototype · 1.0\nChats and calls currently work locally.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Done", style: .default))
             present(alert, animated: true)
         case .saved:
-            home.openChat(MTChat(id: 999, person: ChannelPerson(name: "Избранное", hue: 0.58), kind: .person, message: "", time: ""))
+            home.openChat(MTChat(id: 999, person: ChannelPerson(name: "Saved Messages", hue: 0.58), kind: .person, message: "", time: ""))
         default:
             if let cell = tableView.cellForRow(at: indexPath) { MTViews.pop(cell, scale: 0.97) }
         }

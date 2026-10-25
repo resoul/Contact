@@ -22,6 +22,7 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
     private let viewsLabel = RollingCounterLabel()
     private let commentsLabel = RollingCounterLabel()
     private let commentsRow = UIView()
+    private let channel: ChannelPerson?
     private(set) var spoiler: InkSpoilerView?
 
     var onLongPress: ((ChannelPostView, UILongPressGestureRecognizer) -> Void)?
@@ -31,8 +32,9 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
     var onComments: ((ChannelPostView) -> Void)?
     var onForward: ((ChannelPostView, UILongPressGestureRecognizer) -> Void)?
 
-    init(post: ChannelPost) {
+    init(post: ChannelPost, channel: ChannelPerson? = nil) {
         self.post = post
+        self.channel = channel
         chips = ReactionChipsView(reactions: post.reactions)
         avatars = LiquidAvatarStack(people: post.commenters)
         super.init(frame: .zero)
@@ -56,7 +58,7 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
         bubble.addSubview(content)
 
         let name = UILabel()
-        name.text = "VFX Daily"
+        name.text = channel?.name ?? "VFX Daily"
         name.font = .systemFont(ofSize: 15, weight: .semibold)
         name.textColor = ChannelPalette.name
         content.addArrangedSubview(name)
@@ -68,6 +70,14 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
         textLabel.numberOfLines = 0
         textLabel.attributedText = attributedText()
         content.addArrangedSubview(textLabel)
+        if let scene = post.image {
+            let image = UIImageView(image: DemoPhotos.image(scene, size: CGSize(width: 700, height: 420)))
+            image.contentMode = .scaleAspectFill
+            image.clipsToBounds = true
+            image.layer.cornerRadius = 10
+            image.heightAnchor.constraint(equalTo: image.widthAnchor, multiplier: 0.6).isActive = true
+            content.addArrangedSubview(image)
+        }
         if let spoilerText = post.spoiler {
             let spoiler = InkSpoilerView()
             spoiler.translatesAutoresizingMaskIntoConstraints = false
@@ -133,6 +143,10 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
             commentsRow.addSubview(view)
         }
         commentsRow.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(commentsTapped)))
+        commentsRow.isAccessibilityElement = true
+        commentsRow.accessibilityLabel = "\(post.comments) comments"
+        commentsRow.accessibilityTraits = .button
+        commentsRow.accessibilityIdentifier = "contact.channel.comments"
 
         // The share button outside the bubble.
         forwardButton.backgroundColor = UIColor(white: 0, alpha: 0.28)
@@ -147,6 +161,10 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
         let forwardPress = UILongPressGestureRecognizer(target: self, action: #selector(forwardPressed(_:)))
         forwardPress.minimumPressDuration = 0
         forwardButton.addGestureRecognizer(forwardPress)
+        forwardButton.isAccessibilityElement = true
+        forwardButton.accessibilityLabel = "Repost"
+        forwardButton.accessibilityTraits = .button
+        forwardButton.accessibilityIdentifier = "contact.channel.forward"
 
         NSLayoutConstraint.activate([
             bubble.topAnchor.constraint(equalTo: topAnchor),
@@ -199,7 +217,7 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
         label.text = text
         label.numberOfLines = 0
         label.font = .systemFont(ofSize: 15)
-        label.textColor = .white
+        label.textColor = .label
         let mark = UIImageView(image: UIImage(systemName: "quote.closing"))
         mark.tintColor = ChannelPalette.name
         mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)
@@ -226,7 +244,7 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
     private func attributedText() -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 1.5
-        let base: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 17), .foregroundColor: UIColor.white,
+        let base: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 17), .foregroundColor: UIColor.label,
                                                    .paragraphStyle: paragraph]
         let text = NSMutableAttributedString(string: post.body, attributes: base)
         if let source = post.source {
@@ -242,10 +260,16 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func commentsText(_ count: Int) -> String {
-        "\(count) комментариев"
+        "\(count) comments"
     }
 
     // MARK: Updates
+
+    var currentPost: ChannelPost {
+        var value = post
+        value.reactions = chips.chips.map { ChannelReaction(emoji: $0.emoji, count: $0.count, chosen: $0.chosen) }
+        return value
+    }
 
     func addComment(from person: ChannelPerson) {
         post.comments += 1

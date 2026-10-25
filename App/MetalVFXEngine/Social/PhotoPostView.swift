@@ -155,7 +155,7 @@ final class PhotoPostView: UIView, UIScrollViewDelegate {
         caption.textColor = .white
         caption.numberOfLines = 0
         let comments = UILabel()
-        comments.text = "Посмотреть все комментарии (\(model.comments))\n\(model.time)"
+        comments.text = "View all comments (\(model.comments))\n\(model.time)"
         comments.numberOfLines = 2
         comments.font = .systemFont(ofSize: 13)
         comments.textColor = PhotoFeedPalette.secondary
@@ -175,7 +175,7 @@ final class PhotoPostView: UIView, UIScrollViewDelegate {
     }
 
     private var likesText: String {
-        "Нравится: \(model.likes.formatted(.number.grouping(.automatic)))"
+        "Likes: \(model.likes.formatted(.number.grouping(.automatic)))"
     }
 
     private func configure(_ button: UIButton, symbol: String) {

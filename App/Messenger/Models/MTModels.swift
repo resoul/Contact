@@ -6,6 +6,7 @@ enum MTReactions {
 }
 
 struct MTAccount {
+    let id: UUID
     let person: ChannelPerson
     let phone: String
     let username: String
@@ -16,15 +17,15 @@ enum MTFolder: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .all: return "Все"
-        case .personal: return "Личные"
-        case .channels: return "Каналы"
-        case .bots: return "Боты"
+        case .all: return "All"
+        case .personal: return "Personal"
+        case .channels: return "Channels"
+        case .bots: return "Bots"
         }
     }
 }
 
-enum MTChatKind {
+enum MTChatKind: String, Codable {
     case person, group, channel, bot
 }
 
@@ -41,8 +42,8 @@ struct MTChat {
     var outgoingRead: Bool?
     var online = false
 
-    static let fluidReactionsDemo = MTChat(id: -100, person: ChannelPerson(name: "Жидкие реакции", hue: 0.92),
-                                          kind: .person, message: "Попробуй реакции как жидкость", time: "", online: true)
+    static let fluidReactionsDemo = MTChat(id: -100, person: ChannelPerson(name: "Fluid Reactions", hue: 0.92),
+                                          kind: .person, message: "Try reactions as fluid", time: "", online: true)
 
     func belongs(to folder: MTFolder) -> Bool {
         switch folder {

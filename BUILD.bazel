@@ -7,6 +7,14 @@ config_setting(
     constraint_values = ["@apple_support//constraints:device"],
 )
 
+genrule(
+    name = "DeviceEntitlements",
+    srcs = ["signing/development.mobileprovision"],
+    tools = ["tools/signing/device-entitlements.py"],
+    outs = ["ContactDevice.entitlements"],
+    cmd = "/usr/bin/python3 $(location tools/signing/device-entitlements.py) $(location signing/development.mobileprovision) $@",
+)
+
 apple_metal_library(
     name = "MessengerShaders",
     srcs = glob(["App/MetalVFXEngine/Shaders/*.metal"]),
@@ -19,6 +27,7 @@ swift_library(
     srcs = glob(["App/**/*.swift"]),
     module_name = "Contact",
     data = [":MessengerShaders"],
+    deps = ["//submodules/ContactStorage"],
 )
 
 ios_application(
@@ -27,6 +36,12 @@ ios_application(
     families = ["iphone", "ipad"],
     infoplists = ["App/Info.plist"],
     minimum_os_version = "16.0",
+    # Device prefix is resolved from its profile; Keychain uses the app's exact group.
+    # Simulator identity is embedded by rules_apple and does not need a team/profile.
+    entitlements = select({
+        ":ios_device": ":DeviceEntitlements",
+        "//conditions:default": "App/Simulator.entitlements",
+    }),
     provisioning_profile = select({
         ":ios_device": "signing/development.mobileprovision",
         "//conditions:default": None,

@@ -3,7 +3,7 @@
 //  controller
 //
 //  Chat themes: each one is a day and a night wallpaper palette plus the color of your bubbles.
-//  The sheet previews a theme live in the chat behind it as you tap through the tiles; "Отмена"
+//  The sheet previews a theme live in the chat behind it as you tap through the tiles; "Cancel"
 //  puts the old one back. Its sun / moon button turns the chat from day to night through a dusk.
 //
 
@@ -23,22 +23,22 @@ struct MTChatTheme {
     }
 
     static let all: [MTChatTheme] = [
-        MTChatTheme(emoji: "🏠", name: "Классика", day: [0xDBDDBB, 0x6BA587, 0xD5D88D, 0x88B884].map(rgb),
+        MTChatTheme(emoji: "🏠", name: "Classic", day: [0xDBDDBB, 0x6BA587, 0xD5D88D, 0x88B884].map(rgb),
                     night: [0x0F1A24, 0x1B2B3A, 0x0B1320, 0x203347].map(rgb),
                     outgoingDay: rgb(0xE1FAC8), outgoingNight: rgb(0x3361C0)),
-        MTChatTheme(emoji: "🐥", name: "Цыплёнок", day: [0xF7E48B, 0xF4C46B, 0xFBE9A8, 0xF0B35A].map(rgb),
+        MTChatTheme(emoji: "🐥", name: "Chick", day: [0xF7E48B, 0xF4C46B, 0xFBE9A8, 0xF0B35A].map(rgb),
                     night: [0x2A1E0B, 0x3A2A10, 0x1E1608, 0x47331A].map(rgb),
                     outgoingDay: rgb(0xFFF1B8), outgoingNight: rgb(0xB0791E)),
-        MTChatTheme(emoji: "⛄️", name: "Снеговик", day: [0xBFD9F5, 0x8FB6E8, 0xD6E8FA, 0x9CC3EC].map(rgb),
+        MTChatTheme(emoji: "⛄️", name: "Snowman", day: [0xBFD9F5, 0x8FB6E8, 0xD6E8FA, 0x9CC3EC].map(rgb),
                     night: [0x0D1B33, 0x16294A, 0x0A1428, 0x1F3660].map(rgb),
                     outgoingDay: rgb(0xD6ECFF), outgoingNight: rgb(0x2F6FD6)),
-        MTChatTheme(emoji: "💎", name: "Кристалл", day: [0xC9B6F2, 0x8E7BE0, 0xE1D3FA, 0xA58CEB].map(rgb),
+        MTChatTheme(emoji: "💎", name: "Crystal", day: [0xC9B6F2, 0x8E7BE0, 0xE1D3FA, 0xA58CEB].map(rgb),
                     night: [0x1A1033, 0x2A1A52, 0x120A26, 0x34206B].map(rgb),
                     outgoingDay: rgb(0xE9DEFF), outgoingNight: rgb(0x6A43D1)),
-        MTChatTheme(emoji: "🌷", name: "Тюльпан", day: [0xF6C3CF, 0xEE8FA8, 0xFADCE3, 0xE9A1B4].map(rgb),
+        MTChatTheme(emoji: "🌷", name: "Tulip", day: [0xF6C3CF, 0xEE8FA8, 0xFADCE3, 0xE9A1B4].map(rgb),
                     night: [0x2B0F1A, 0x42182A, 0x1F0A12, 0x521F35].map(rgb),
                     outgoingDay: rgb(0xFFE0E8), outgoingNight: rgb(0xC23D6C)),
-        MTChatTheme(emoji: "🎄", name: "Ёлка", day: [0xBFE3C0, 0x6FB57A, 0xD9F0C9, 0x8CC98A].map(rgb),
+        MTChatTheme(emoji: "🎄", name: "Christmas Tree", day: [0xBFE3C0, 0x6FB57A, 0xD9F0C9, 0x8CC98A].map(rgb),
                     night: [0x0B1F12, 0x12301C, 0x07160C, 0x1A3F25].map(rgb),
                     outgoingDay: rgb(0xD9F7CF), outgoingNight: rgb(0x2E8A4B)),
     ]
@@ -83,7 +83,7 @@ final class MTThemeSheet: UIView {
         sheet.addSubview(blur)
         addSubview(sheet)
 
-        let title = MTViews.label("Тема чата", size: 17, weight: .semibold)
+        let title = MTViews.label("Chat Theme", size: 17, weight: .semibold)
         title.textAlignment = .center
         title.frame = CGRect(x: 60, y: 14, width: bounds.width - 120, height: 22)
         sheet.addSubview(title)
@@ -115,7 +115,7 @@ final class MTThemeSheet: UIView {
         apply.frame = CGRect(x: 16, y: 180, width: bounds.width - 32, height: 50)
         apply.backgroundColor = MTPalette.accent
         apply.layer.cornerRadius = 12
-        apply.setTitle("Применить тему", for: .normal)
+        apply.setTitle("Apply Theme", for: .normal)
         apply.setTitleColor(.white, for: .normal)
         apply.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
         apply.addAction(UIAction { [weak self] _ in

@@ -75,7 +75,7 @@ final class IslandNewPostsPill: IslandFluidView {
             image.heightAnchor.constraint(equalToConstant: 22).isActive = true
             avatars.addArrangedSubview(image)
         }
-        label.text = "\(count) новых постов"
+        label.text = "\(count) new posts"
         phase = .dripping
         phaseTime = 0
         snapTime = nil

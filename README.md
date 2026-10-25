@@ -80,13 +80,17 @@ Launching on a device through `devicectl` requires iOS 17 or later; the app itse
 
 ```text
 App/Messenger/               MiniTelegram screens, models, and local fixtures
+App/Application/             Account contexts and background storage ownership
 App/MetalVFXEngine/          Shared effects and Metal shader sources
 App/Support/                 iOS compatibility helpers
 libraries/                   Bazel rules, build scripts, and library git submodules
+libraries/grdb/              GRDB Swift module, pinned upstream archive
+libraries/sqlcipher/         Vendored SQLCipher engine and Swift-compatible headers
 submodules/FFMpegBinding/     Objective-C FFmpeg API for Swift
 submodules/WebPBinding/       Objective-C WebP API for Swift
 submodules/MozjpegBinding/    JPEG/JPEG XL APIs and stripped thumbnails
 submodules/ImageCompression/ Swift image compression helpers
+submodules/ContactStorage/   Account databases, Keychain, migrations and observed queries
 cache/                       Ignored Bazel outputs and symlinks
 BUILD.bazel                  App, Swift module, and resources
 MODULE.bazel                 Bazel dependencies and build tools
@@ -139,7 +143,11 @@ Only the local `file` protocol is enabled. Network protocols, the FFmpeg CLI, li
 
 Contact opens the MiniTelegram interface directly: chats, contacts, calls, settings, profiles, stories, media previews, composer, reactions, and themes. The sources were copied from the current working tree of `demo/controller/controller/MiniTelegram` and its shared `MetalVFXEngine`, including the fluid-reaction implementation. Contact builds independently of that checkout.
 
-`App/Messenger/Models` contains shared chat/account models; `App/Messenger/Fixtures/MTData.swift` supplies the prototype's local accounts, people, chats, and stories. Messages, read receipts, recording, and calls are simulated and kept in memory. There is no backend, authentication, or persistent message database yet. The sample passcode is `1234` and is a UI demonstration. Media previews are generated locally by `DemoPhotos`.
+`App/Messenger/Models` contains shared chat/account models; `App/Messenger/Fixtures/MTData.swift` supplies the prototype's local accounts, people, chats, and stories. Chats and message history are read from ContactStorage. Fixture conversations are inserted once per account in one transaction with a durable seed marker; later launches never recreate deleted fixture data. Sending, editing, reactions, channel stars, forwards, pin/mute/read/archive actions, deletions and channel reading anchors are saved. Random incoming-message timers and fabricated delivery acknowledgements are disabled; new outgoing messages remain in the durable outbox until a future sync engine confirms them. Calls and recording remain UI demonstrations. There is no backend or authentication yet. The sample passcode is `1234` and is a UI demonstration. Media previews are generated locally by `DemoPhotos`.
+
+The chat list includes four channel examples: VFX Daily, Motion Lab, Metal Notes, and UI Kitchen. `Fixtures/MTChannelData.swift` supplies their posts. Pull up past the last post to reveal the next channel's avatar and progress ring; release after the haptic threshold to switch. Channels follow the current account's list order and wrap around, excluding groups. Switching replaces the current feed so Back returns directly to the chat list. Each account keeps channel posts, reactions and reading positions in its encrypted database. VoiceOver exposes a Next Channel action on the Back button, and Reduce Motion uses a cross-fade.
+
+Channels use the original Telegram Post components: reactions and view counts inside each card, liquid comment sheets, stars that fill and accelerate when held, a long-press reaction picker with an expanding accordion and dust deletion, and forwarding by dragging a post to a contact. Channel reactions retain their original liquid flights and heart effect. Ordinary chats keep their separate emoji-flight reactions and the dedicated 💨 effect; swiping a message to reply now uses the original stretching liquid drop and arrow. Comments, stars, and forwarding remain local UI demonstrations.
 
 All 19 shader sources are compiled with Bazel's `apple_metal_library` into `default.metallib` at the app bundle root, where `VFXGPU` loads it. This includes liquid reactions, emoji bursts, chat wallpaper, spoilers, dust deletion, story rings, and liquid theme transitions. The full shared effect engine remains available for subsequent messenger features.
 
@@ -167,3 +175,9 @@ let reconstructedJPEG = tiny.flatMap { decodeTinyThumbnail($0) }
 Consumers add the relevant binding to their Bazel `deps`: `//submodules/FFMpegBinding`, `//submodules/WebPBinding`, `//submodules/MozjpegBinding`, or `//submodules/ImageCompression`. The messenger currently uses its generated fixtures; codec dependencies can be added when real media flows are introduced.
 
 All six Telegram MozjpegBinding entry points remain available, including JPEG XL encoding/decoding. The compatibility JPEG function uses quality 72 and encodes in memory without touching `tempFilePath`. Mini-thumbnails retain Telegram's v1 format. JPEG flattens alpha onto white; JPEG XL preserves alpha, with lossless encoding at quality 100 after sRGB normalization. Images are limited to 32 million pixels; animated JPEG XL is rejected.
+
+## Storage benchmark
+
+Contact includes `//libraries/grdb` (GRDB 7.11.1) backed by `//libraries/sqlcipher` (SQLCipher 4.19.0 Community / SQLite 3.53.4), using CommonCrypto. The [storage integration notes](submodules/ContactStorage/README.md) describe the database and UI integration. GRDB's privacy manifest and both libraries' licenses are bundled with the app. [ContactStorage](submodules/ContactStorage/README.md) opens a separate encrypted database and Keychain key per account, with versioned migrations, atomic message/outbox operations and observable queries. The chat list and conversation screens now use committed database snapshots through MTAccountSession, preserving their existing interaction animations.
+
+[`tools/StorageBenchmark`](tools/StorageBenchmark/README.md) contains a separate Release runner comparing direct SQLCipher, GRDB cached queries and GRDB records on the same encrypted engine. It measures insertion, update, reads and deletion at 10,000–1,000,000 messages. The [iPhone 14 Pro Max report](tools/StorageBenchmark/Results/2026-10-25-iphone14-pro-max/report.html) includes p50/p95 and reproducible raw samples. The timing runner remains independent of Contact's production Bazel dependencies.

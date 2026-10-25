@@ -18,10 +18,10 @@ final class MTTabBar: UIView {
 
         var title: String {
             switch self {
-            case .contacts: return "Контакты"
-            case .calls: return "Звонки"
-            case .chats: return "Чаты"
-            case .settings: return "Настройки"
+            case .contacts: return "Contacts"
+            case .calls: return "Calls"
+            case .chats: return "Chats"
+            case .settings: return "Settings"
             }
         }
 

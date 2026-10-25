@@ -29,7 +29,7 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
     private let navTitle = MTViews.label(size: 16, weight: .semibold)
     private var buttons: [UIView] = []
     private let info = UIView()
-    private let mediaTabs = LiquidSelector(titles: ["Медиа", "Файлы", "Ссылки", "Голос"], style: .segments,
+    private let mediaTabs = LiquidSelector(titles: ["Media", "Files", "Links", "Voice"], style: .segments,
                                            liquid: MTPalette.accent, selectedTint: .white, normalTint: MTPalette.secondary)
     private let grid = MTMediaGrid(count: 72)
     private let monthPill = UILabel()
@@ -92,10 +92,10 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
         view.addSubview(segments)
         name.text = person.name
         view.addSubview(name)
-        status.text = online ? "в сети" : "был(а) недавно"
+        status.text = online ? "online" : "last seen recently"
         view.addSubview(status)
 
-        for (symbol, title) in [("bubble.left.fill", "Чат"), ("bell.fill", "Звук"), ("phone.fill", "Звонок"), ("ellipsis", "Ещё")] {
+        for (symbol, title) in [("bubble.left.fill", "Chat"), ("bell.fill", "Sound"), ("phone.fill", "Call"), ("ellipsis", "More")] {
             let button = UIControl()
             button.backgroundColor = MTPalette.cell
             button.layer.cornerRadius = 12
@@ -117,9 +117,9 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
         info.backgroundColor = MTPalette.cell
         info.layer.cornerRadius = 12
         info.layer.cornerCurve = .continuous
-        let rows = [("телефон", "+7 900 \(100 + Int(person.hue * 800)) 21-12"),
-                    ("имя пользователя", "@" + person.name.split(separator: " ")[0].lowercased()),
-                    ("о себе", "Дизайн, Metal и жидкие интерфейсы 💧")]
+        let rows = [("phone", "+7 900 \(100 + Int(person.hue * 800)) 21-12"),
+                    ("username", "@" + person.name.split(separator: " ")[0].lowercased()),
+                    ("about", "Design, Metal and fluid interfaces 💧")]
         for (index, row) in rows.enumerated() {
             let value = MTViews.label(row.1, size: 16, color: index == 1 ? MTPalette.accent : MTPalette.text)
             let key = MTViews.label(row.0, size: 13, color: MTPalette.secondary)
@@ -154,7 +154,7 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
         navBackground.alpha = 0
         backButton.addAction(UIAction { [weak self] _ in self?.home?.root?.pop() }, for: .touchUpInside)
         nav.addSubview(backButton)
-        editButton.setTitle("Изм.", for: .normal)
+        editButton.setTitle("Edited", for: .normal)
         editButton.titleLabel?.font = .systemFont(ofSize: 17)
         editButton.tintColor = MTPalette.accent
         nav.addSubview(editButton)
@@ -184,7 +184,7 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
     private func showHint() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
-            MTViews.toast("Тяните вниз · щипок по медиа", symbol: "hand.draw", in: self.view,
+            MTViews.toast("Pull down · pinch media", symbol: "hand.draw", in: self.view,
                           top: self.view.bounds.height - self.view.safeAreaInsets.bottom - 60)
         }
     }
@@ -378,13 +378,13 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
     private func buttonTapped(_ title: String, _ button: UIView) {
         MTViews.pop(button, scale: 0.92)
         switch title {
-        case "Чат": home?.root?.pop()
-        case "Звонок": home?.call(person)
-        case "Звук":
+        case "Chat": home?.root?.pop()
+        case "Call": home?.call(person)
+        case "Sound":
             if let icon = button.viewWithTag(1) as? UIImageView {
                 let muted = icon.image == UIImage(systemName: "bell.fill")
                 icon.setContactSymbol(UIImage(systemName: muted ? "bell.slash.fill" : "bell.fill")!, transition: .replace)
-                MTViews.toast(muted ? "Уведомления отключены" : "Уведомления включены",
+                MTViews.toast(muted ? "Notifications disabled" : "Notifications enabled",
                               symbol: muted ? "bell.slash.fill" : "bell.fill", in: view)
             }
         default: break
@@ -402,7 +402,7 @@ final class MTProfileViewController: UIViewController, UIScrollViewDelegate {
         let topInGrid = scroll.contentOffset.y + navHeight - grid.frame.minY
         guard topInGrid > 0, scroll.isDragging || scroll.isDecelerating else { return }
         monthFade?.cancel()
-        let months = ["Октябрь 2026", "Сентябрь 2026", "Август 2026", "Июль 2026", "Июнь 2026", "Май 2026", "Апрель 2026"]
+        let months = ["October 2026", "September 2026", "August 2026", "July 2026", "June 2026", "May 2026", "April 2026"]
         let month = months[min(grid.month(at: topInGrid), months.count - 1)]
         if monthPill.text != month {
             monthPill.text = month

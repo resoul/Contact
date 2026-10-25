@@ -43,6 +43,11 @@ final class ReactionChip: UIView {
         count = reaction.count
         chosen = reaction.chosen
         super.init(frame: .zero)
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+        accessibilityLabel = emoji
+        accessibilityValue = "\(count)"
+        accessibilityIdentifier = "contact.channel.reaction.\(emoji)"
         background.layer.cornerCurve = .continuous
         background.isUserInteractionEnabled = false
         addSubview(background)
@@ -88,8 +93,8 @@ final class ReactionChip: UIView {
             background.backgroundColor = ChannelPalette.star.withAlphaComponent(chosen ? 0.42 : 0.2)
             counter.textColor = chosen ? .white : ChannelPalette.star
         } else {
-            background.backgroundColor = chosen ? ChannelPalette.accent : UIColor(white: 1, alpha: 0.1)
-            counter.textColor = .white
+            background.backgroundColor = chosen ? ChannelPalette.accent : UIColor.tertiarySystemFill
+            counter.textColor = chosen ? .white : .label
         }
     }
 
@@ -97,6 +102,7 @@ final class ReactionChip: UIView {
         let up = newCount >= count
         let oldWidth = preferredWidth
         count = newCount
+        accessibilityValue = "\(newCount)"
         chosen = newChosen
         counter.setText(FeedFormat.count(count), animated: animated, up: up)
         if animated {
@@ -357,6 +363,7 @@ final class ReactionChipsView: UIView {
         chip.onStarsSent = { [weak self] in self?.onStarsSent?($0, $1) }
         chips.insert(chip, at: index ?? chips.count)
         addSubview(chip)
+        accessibilityElements = chips
         return chip
     }
 
@@ -408,6 +415,7 @@ final class ReactionChipsView: UIView {
 
     func remove(_ chip: ReactionChip) {
         chips.removeAll { $0 === chip }
+        accessibilityElements = chips
         UIView.animate(withDuration: 0.25) {
             chip.alpha = 0
             chip.transform = CGAffineTransform(scaleX: 0.2, y: 0.2)

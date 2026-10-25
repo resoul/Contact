@@ -116,7 +116,7 @@ final class MTPhotoViewer: UIView, UIScrollViewDelegate {
     }
 
     private func updateCounter() {
-        counter.text = images.count > 1 ? "\(index + 1) из \(images.count)" : "Фото"
+        counter.text = images.count > 1 ? "\(index + 1) of \(images.count)" : "Photo"
     }
 
     // MARK: Opening and closing

@@ -28,7 +28,7 @@ enum PhotoFeedPalette {
 }
 
 enum DemoPhotos {
-    enum Scene: Int, CaseIterable {
+    enum Scene: Int, CaseIterable, Codable {
         case sunset, ocean, city, forest, desert, aurora, bloom
     }
 

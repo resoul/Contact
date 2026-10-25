@@ -67,13 +67,13 @@ final class ComposeSheet: UIView, UITextViewDelegate {
 
     private func build(author: ChannelPerson, replyingTo handle: String?) {
         let cancel = UIButton(type: .system)
-        cancel.setTitle("Отмена", for: .normal)
+        cancel.setTitle("Cancel", for: .normal)
         cancel.titleLabel?.font = .systemFont(ofSize: 16)
         cancel.tintColor = .white
         cancel.addAction(UIAction { [weak self] _ in self?.close(posting: false) }, for: .touchUpInside)
 
         var config = UIButton.Configuration.filled()
-        config.title = handle == nil ? "Опубликовать" : "Ответить"
+        config.title = handle == nil ? "Post" : "Reply"
         config.cornerStyle = .capsule
         config.baseBackgroundColor = TimelinePalette.accent
         config.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 16, bottom: 7, trailing: 16)
@@ -84,7 +84,7 @@ final class ComposeSheet: UIView, UITextViewDelegate {
         let avatar = UIImageView(image: ChannelAvatar.image(for: author, size: 40))
         let replying = UILabel()
         if let handle {
-            let text = NSMutableAttributedString(string: "Ответ ", attributes: [.foregroundColor: TimelinePalette.secondary])
+            let text = NSMutableAttributedString(string: "Reply ", attributes: [.foregroundColor: TimelinePalette.secondary])
             text.append(NSAttributedString(string: "@\(handle)", attributes: [.foregroundColor: TimelinePalette.accent]))
             replying.attributedText = text
             replying.font = .systemFont(ofSize: 14)
@@ -97,7 +97,7 @@ final class ComposeSheet: UIView, UITextViewDelegate {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
         textView.keyboardAppearance = .dark
-        placeholder.text = handle == nil ? "Что происходит?" : "Напишите ответ"
+        placeholder.text = handle == nil ? "What’s happening?" : "Write a reply"
         placeholder.font = .systemFont(ofSize: 19)
         placeholder.textColor = TimelinePalette.secondary
 

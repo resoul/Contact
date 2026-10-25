@@ -59,7 +59,7 @@ final class StoryRingsView: UIView {
             scroll.addSubview(avatar)
             avatars.append(avatar)
             let name = UILabel()
-            name.text = index == 0 ? "Ваша история" : String(user.person.name.split(separator: " ").first ?? "")
+            name.text = index == 0 ? "Your Story" : String(user.person.name.split(separator: " ").first ?? "")
             name.font = .systemFont(ofSize: 11)
             name.textColor = .white
             name.textAlignment = .center

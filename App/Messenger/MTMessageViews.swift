@@ -12,25 +12,25 @@
 
 import UIKit
 
-struct MTMessage {
-    enum Kind {
+struct MTMessage: Codable {
+    enum Kind: Codable {
         case text(String)
         case voice(TimeInterval)
         case photos([DemoPhotos.Scene])
         case round(DemoPhotos.Scene)
         case sticker(String)
-        /// The "Непрочитанные сообщения" band, not a message.
+        /// The "Unread messages" band, not a message.
         case unreadDivider
     }
 
-    struct Quote {
+    struct Quote: Codable {
         let name: String
         let text: String
     }
 
-    private static var lastID = 0
-
     let id: Int
+    var storageID = UUID()
+    var timestamp = Int64(Date().timeIntervalSince1970 * 1000)
     var kind: Kind
     var outgoing: Bool
     var time: String
@@ -41,10 +41,10 @@ struct MTMessage {
     var link: MTLinkPreview?
     var edited = false
     var reactions: [String] = []
+    var channelPost: ChannelPost?
 
     init(kind: Kind, outgoing: Bool, time: String, read: Bool = true, pinned: Int? = nil, reply: Quote? = nil) {
-        Self.lastID += 1
-        id = Self.lastID
+        id = Int.random(in: 1...Int.max)
         self.kind = kind
         self.outgoing = outgoing
         self.time = time
@@ -67,10 +67,10 @@ struct MTMessage {
     var summary: String {
         switch kind {
         case .text(let text): return text
-        case .voice: return "🎤 Голосовое сообщение"
-        case .photos(let scenes): return scenes.count == 1 ? "🖼 Фотография" : "🖼 Альбом"
-        case .round: return "📹 Видеосообщение"
-        case .sticker(let sticker): return "\(sticker) Стикер"
+        case .voice: return "🎤 Voice message"
+        case .photos(let scenes): return scenes.count == 1 ? "🖼 Photo" : "🖼 Album"
+        case .round: return "📹 Video message"
+        case .sticker(let sticker): return "\(sticker) Sticker"
         case .unreadDivider: return ""
         }
     }
@@ -266,7 +266,7 @@ final class MTMessageBubble: UIView, MTBubbleContent {
 
     init(text: String, outgoing: Bool, time: String, read: Bool, reply: MTMessage.Quote? = nil, edited: Bool = false,
          link: MTLinkPreview? = nil) {
-        (meta, checks) = Self.makeMeta(time: edited ? "изм. " + time : time, outgoing: outgoing, read: read)
+        (meta, checks) = Self.makeMeta(time: edited ? "edited " + time : time, outgoing: outgoing, read: read)
         quote = reply.map { MTQuoteView($0, outgoing: outgoing) }
         linkView = link.map { MTLinkView($0, tint: outgoing ? MTPalette.outgoingMeta : MTPalette.accent) }
         fill = MTBubbleFill(style: MTBubbleStyle(outgoing: outgoing), color: outgoing ? MTPalette.outgoing : MTPalette.incoming)
@@ -576,6 +576,7 @@ final class MTMessageCell: UITableViewCell {
     var onDoubleTap: ((CGPoint) -> Void)?
     var onLongPress: (() -> Void)?
     var onReply: (() -> Void)?
+    var onReplySwipe: ((UIView?, CGFloat, Bool) -> Void)?
     var onReaction: ((String) -> Void)?
     var onPhoto: ((Int, UIImageView) -> Void)?
 
@@ -598,7 +599,7 @@ final class MTMessageCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         backgroundColor = .clear
         selectionStyle = .none
-        divider.text = "Непрочитанные сообщения"
+        divider.text = "Unread messages"
         divider.font = .systemFont(ofSize: 14, weight: .medium)
         divider.textColor = MTPalette.secondary
         divider.textAlignment = .center
@@ -773,7 +774,7 @@ final class MTMessageCell: UITableViewCell {
         let reveal = min(-swipe / 60, 1)
         replyCircle.frame = CGRect(x: width - 46, y: bubble.frame.midY - 17, width: 34, height: 34)
         replyIcon.frame = replyCircle.bounds
-        replyCircle.alpha = reveal
+        replyCircle.alpha = onReplySwipe == nil ? reveal : 0
         replyCircle.transform = CGAffineTransform(scaleX: 0.4 + 0.6 * reveal, y: 0.4 + 0.6 * reveal)
     }
 
@@ -812,21 +813,25 @@ final class MTMessageCell: UITableViewCell {
 
     @objc private func panned(_ gesture: UIPanGestureRecognizer) {
         switch gesture.state {
+        case .began:
+            onReplySwipe?(bubble, 0, false)
         case .changed:
             let dx = min(0, gesture.translation(in: self).x)
             // Free up to the arrow, then heavier.
-            swipe = dx > -60 ? dx : -60 + (dx + 60) * 0.3
-            let armed = swipe <= -58
+            swipe = dx > -70 ? dx : -70 + (dx + 70) * 0.3
+            let armed = swipe <= -70
             if armed != replyArmed {
                 replyArmed = armed
                 if armed {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     MTViews.pop(replyIcon, scale: 1.4)
                 }
             }
             layoutContent()
+            onReplySwipe?(bubble, -swipe, armed)
         case .ended, .cancelled:
             if replyArmed, gesture.state == .ended { onReply?() }
+            onReplySwipe?(nil, 0, false)
             replyArmed = false
             swipe = 0
             UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0) {
@@ -934,7 +939,7 @@ final class MTPinnedBar: UIControl {
         let up = index < current
         let changed = index != current
         current = index
-        title.text = "Закреплённое сообщение #\(index + 1)"
+        title.text = "Pinned message #\(index + 1)"
         guard animated, changed else {
             text.text = MTData.pinnedMessages[index]
             setNeedsLayout()

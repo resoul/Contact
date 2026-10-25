@@ -12,7 +12,7 @@ import UIKit
 
 // MARK: - Link previews
 
-struct MTLinkPreview: Equatable {
+struct MTLinkPreview: Equatable, Codable {
     let url: String
     let site: String
     let title: String
@@ -26,15 +26,15 @@ struct MTLinkPreview: Equatable {
         guard let match = detector?.firstMatch(in: text, options: [], range: range), let url = match.url,
               let host = url.host?.replacingOccurrences(of: "www.", with: "") else { return nil }
         let known: [String: (String, String, DemoPhotos.Scene)] = [
-            "telegram.org": ("Telegram", "Telegram — новая эра общения", .aurora),
-            "apple.com": ("Apple", "iPhone — новые возможности на каждый день", .city),
-            "github.com": ("GitHub", "Где строят программы — более 100 млн разработчиков", .forest),
-            "youtube.com": ("YouTube", "Смотрите любимые видео и музыку", .sunset),
-            "figma.com": ("Figma", "Макеты мини-Telegram · 24 экрана", .bloom),
+            "telegram.org": ("Telegram", "Telegram — a new era of communication", .aurora),
+            "apple.com": ("Apple", "iPhone — new possibilities every day", .city),
+            "github.com": ("GitHub", "Where software is built — over 100 million developers", .forest),
+            "youtube.com": ("YouTube", "Watch your favorite videos and listen to music", .sunset),
+            "figma.com": ("Figma", "Mini-Telegram designs · 24 screens", .bloom),
         ]
         let entry = known.first { host.hasSuffix($0.key) }?.value
         let name = host.split(separator: ".").first.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? host
-        return MTLinkPreview(url: url.absoluteString, site: entry?.0 ?? name, title: entry?.1 ?? "Страница на \(host)",
+        return MTLinkPreview(url: url.absoluteString, site: entry?.0 ?? name, title: entry?.1 ?? "Page on \(host)",
                              scene: entry?.2 ?? .ocean)
     }
 }
@@ -258,13 +258,13 @@ final class MTEmojiPanel: UIInputView {
             (from...to).compactMap { Unicode.Scalar($0).map { String($0) } }
         }
         sections = [
-            ("Часто используемые", Self.recent),
-            ("Смайлики", range(0x1F600, 0x1F64F)),
-            ("Животные", range(0x1F400, 0x1F43C)),
-            ("Еда", range(0x1F345, 0x1F37F)),
-            ("Активность", ["⚽️", "🏀", "🏈", "⚾️", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸", "🥊", "⛳️", "🎯", "🎳", "🎮", "🎲",
+            ("Frequently Used", Self.recent),
+            ("Smileys", range(0x1F600, 0x1F64F)),
+            ("Animals", range(0x1F400, 0x1F43C)),
+            ("Food", range(0x1F345, 0x1F37F)),
+            ("Activities", ["⚽️", "🏀", "🏈", "⚾️", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸", "🥊", "⛳️", "🎯", "🎳", "🎮", "🎲",
                             "🧩", "🎨", "🎬", "🎤", "🎧", "🎸", "🎹", "🥁", "🎻", "🏆", "🥇", "🎪", "🛹", "🚴"]),
-            ("Символы", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘",
+            ("Symbols", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘",
                          "✨", "⭐️", "🌟", "💫", "🔥", "💥", "💯", "✅", "❌", "⚡️", "🎉", "🚀"]),
         ]
         scroll.delegate = self

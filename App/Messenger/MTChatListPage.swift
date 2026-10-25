@@ -10,7 +10,7 @@
 //  • row swipes (read / pin to the right, mute / delete / archive to the left) with a full swipe
 //    that stretches the edge button over the whole row;
 //  • a long press peeks into the chat over a blur, with a menu;
-//  • chats come alive: "печатает…" in the row, messages arrive and move the chat up, ✓ becomes ✓✓.
+//  • chats come alive: "is typing…" in the row, messages arrive and move the chat up, ✓ becomes ✓✓.
 //
 
 import UIKit
@@ -18,7 +18,10 @@ import UIKit
 final class MTChatListPage: MTPage {
     var onUnreadChanged: ((Int) -> Void)?
 
-    private var chats = MTData.chats(for: 0)
+    private var chats: [MTChat] = []
+    private weak var storageSession: MTAccountSession?
+    private let storageOrigin = UUID()
+    private var applyingStoredChange = false
     private var folder: MTFolder = .all
     private var visible: [MTChat] = []
     private var typing: Set<Int> = []
@@ -29,7 +32,6 @@ final class MTChatListPage: MTPage {
                                          selectedTint: .white, normalTint: MTPalette.secondary)
     private var folderBadges: [UILabel] = []
     private weak var openCell: MTChatCell?
-    private var timer: Timer?
     private var storiesExpanded = false
 
     override func viewDidLoad() {
@@ -48,7 +50,7 @@ final class MTChatListPage: MTPage {
         header.onLock = { [weak self] in self?.home?.lock() }
         header.onCompose = { [weak self] in
             guard let self else { return }
-            MTViews.toast("Новое сообщение", symbol: "square.and.pencil", in: self.view)
+            MTViews.toast("New Message", symbol: "square.and.pencil", in: self.view)
         }
         header.onStackTap = { [weak self] in self?.expandStories() }
         header.onOpenStory = { [weak self] index in self?.openStory(index) }
@@ -80,16 +82,6 @@ final class MTChatListPage: MTPage {
         }
         refilter()
         updateFolderBadges()
-    }
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        startSimulation()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        timer?.invalidate()
     }
 
     private var safeTop: CGFloat { view.safeAreaInsets.top }
@@ -129,6 +121,9 @@ final class MTChatListPage: MTPage {
 
     // MARK: Data
 
+    /// Actual account order, independent of the active folder. Groups are not channel destinations.
+    var channels: [MTChat] { chats.filter { $0.kind == .channel } }
+
     var unreadTotal: Int { chats.filter { !$0.muted }.reduce(0) { $0 + $1.unread } }
 
     func chat(with person: ChannelPerson) -> MTChat? {
@@ -166,36 +161,43 @@ final class MTChatListPage: MTPage {
     }
 
     func markRead(_ id: Int) {
-        update(id) { $0.unread = 0 }
+        storageSession?.markRead(chatID: id)
     }
 
     /// Another account: the rows leave and the new ones come in one after another.
     func load(account: Int, animated: Bool) {
+        storageSession?.onChatsChanged = nil
+        storageSession = nil
+        chats = []
+        typing = []
         closeOpenCell()
-        let cells = table.visibleCells
-        UIView.animate(withDuration: 0.18, animations: {
-            for (index, cell) in cells.enumerated() {
-                cell.alpha = 0
-                cell.transform = CGAffineTransform(translationX: -24 - CGFloat(index) * 4, y: 0)
-            }
-        }, completion: { _ in
-            self.chats = MTData.chats(for: account)
-            self.typing = []
-            self.refilter()
-            self.table.reloadData()
-            self.table.layoutIfNeeded()
-            for (index, cell) in self.table.visibleCells.enumerated() {
-                cell.alpha = 0
-                cell.transform = CGAffineTransform(translationX: 40, y: 0)
-                UIView.animate(withDuration: 0.5, delay: Double(index) * 0.035, usingSpringWithDamping: 0.8,
-                               initialSpringVelocity: 0) {
-                    cell.alpha = 1
-                    cell.transform = .identity
-                }
-            }
-            self.updateFolderBadges()
-        })
+        refilter()
+        table.reloadData()
         header.setAccount(account)
+        updateFolderBadges()
+    }
+
+    func bind(session: MTAccountSession) {
+        storageSession?.onChatsChanged = nil
+        storageSession = session
+        session.onChatsChanged = { [weak self, weak session] origin in
+            guard let self, let session, self.storageSession === session, origin != self.storageOrigin else { return }
+            self.applyStoredChats(session.chats)
+        }
+        applyStoredChats(session.chats)
+    }
+
+    private func applyStoredChats(_ values: [MTChat]) {
+        guard isViewLoaded else { chats = values; return }
+        let previous = visible.map(\.id)
+        chats = values
+        refilter()
+        if previous == visible.map(\.id) {
+            for path in table.indexPathsForVisibleRows ?? [] where visible.indices.contains(path.row) {
+                (table.cellForRow(at: path) as? MTChatCell)?.configure(visible[path.row], typing: false, animated: true)
+            }
+        } else { table.reloadData() }
+        updateFolderBadges()
     }
 
     func updateLock() {
@@ -282,67 +284,19 @@ final class MTChatListPage: MTPage {
         viewer.onSeen = { [weak self] user in self?.header.markSeen(user) }
     }
 
-    // MARK: Live chats
-
-    private func startSimulation() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 4.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.simulate() }
-        }
-    }
-
-    private func simulate() {
-        // Rows must not move under a finger or an open swipe.
-        guard openCell == nil, !table.isDragging, !table.isDecelerating else { return }
-        if Bool.random(), let waiting = chats.filter({ $0.outgoingRead == false }).randomElement() {
-            update(waiting.id) { $0.outgoingRead = true }
-            return
-        }
-        guard let chat = chats.filter({ ($0.kind == .person || $0.kind == .group) && !$0.muted && !typing.contains($0.id) })
-            .randomElement() else { return }
-        typing.insert(chat.id)
-        update(chat.id) { _ in }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
-            self?.deliver(to: chat.id)
-        }
-    }
-
-    private static let incoming = ["Ты где? 🙂", "Скинь, пожалуйста, ссылку", "Ахаха 😂", "Окей, через 5 минут",
-                                   "Посмотри, что я нашла", "Созвонимся вечером?", "👍", "Готово!"]
-
-    private func deliver(to id: Int) {
-        guard typing.remove(id) != nil else { return }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        let time = formatter.string(from: Date())
-        update(id) { chat in
-            chat.message = (chat.kind == .group ? "\(trickPeople.randomElement()!.name.split(separator: " ")[0]): " : "")
-                + Self.incoming.randomElement()!
-            chat.time = time
-            chat.unread += 1
-            chat.outgoingRead = nil
-        }
-        moveToTop(id)
-    }
-
-    /// A chat with news jumps above the others (below the pinned ones).
-    private func moveToTop(_ id: Int) {
-        guard openCell == nil, let from = chats.firstIndex(where: { $0.id == id }), !chats[from].pinned else { return }
-        let chat = chats.remove(at: from)
-        let to = chats.firstIndex { !$0.pinned } ?? chats.count
-        chats.insert(chat, at: to)
-        let oldVisible = visible
-        refilter()
-        if let oldRow = oldVisible.firstIndex(where: { $0.id == id }), let newRow = visible.firstIndex(where: { $0.id == id }),
-           oldRow != newRow {
-            table.moveRow(at: IndexPath(row: oldRow, section: 0), to: IndexPath(row: newRow, section: 0))
-        }
-    }
-
     // MARK: Row actions
 
     private func perform(_ action: MTChatCell.Action, on id: Int, cell: MTChatCell?) {
         guard let chat = chats.first(where: { $0.id == id }) else { return }
+        if !applyingStoredChange {
+            storageSession?.changeChat(chat, action: action, origin: storageOrigin) { [weak self, weak cell] in
+                guard let self else { return }
+                self.applyingStoredChange = true
+                self.perform(action, on: id, cell: cell)
+                self.applyingStoredChange = false
+            }
+            return
+        }
         switch action {
         case .read:
             update(id) { $0.unread = $0.unread > 0 ? 0 : 1 }
@@ -365,7 +319,7 @@ final class MTChatListPage: MTPage {
         case .mute:
             update(id) { $0.muted.toggle() }
             cell?.close()
-            MTViews.toast(chat.muted ? "Уведомления включены" : "Уведомления отключены",
+            MTViews.toast(chat.muted ? "Notifications enabled" : "Notifications disabled",
                           symbol: chat.muted ? "bell.fill" : "bell.slash.fill", in: view)
         case .delete:
             if let cell {
@@ -375,7 +329,7 @@ final class MTChatListPage: MTPage {
             }
         case .archive:
             remove(id, animation: .left)
-            MTViews.toast("Чат перенесён в архив", symbol: "archivebox.fill", in: view)
+            MTViews.toast("Chat archived", symbol: "archivebox.fill", in: view)
         }
     }
 
@@ -497,7 +451,7 @@ final class MTStoriesHeader: UIView {
     private let exitButton = MTViews.iconButton("gearshape", size: 19)
     private let composeButton = MTViews.iconButton("square.and.pencil", size: 19)
     private let lockButton = MTViews.iconButton("lock.open.fill", size: 13, tint: MTPalette.text)
-    private let title = MTViews.label("Чаты", size: 17, weight: .semibold)
+    private let title = MTViews.label("Chats", size: 17, weight: .semibold)
     private let canvas = LiquidCanvasView()
     private var avatars: [UIImageView] = []
     private var names: [UILabel] = []
@@ -515,9 +469,9 @@ final class MTStoriesHeader: UIView {
         addSubview(background)
         hairline.backgroundColor = MTPalette.separator
         addSubview(hairline)
-        exitButton.accessibilityLabel = "Настройки"
-        composeButton.accessibilityLabel = "Новое сообщение"
-        lockButton.accessibilityLabel = "Заблокировать"
+        exitButton.accessibilityLabel = "Settings"
+        composeButton.accessibilityLabel = "New Message"
+        lockButton.accessibilityLabel = "Lock"
         exitButton.addAction(UIAction { [weak self] _ in self?.onSettings?() }, for: .touchUpInside)
         composeButton.addAction(UIAction { [weak self] _ in self?.onCompose?() }, for: .touchUpInside)
         lockButton.addAction(UIAction { [weak self] _ in self?.onLock?() }, for: .touchUpInside)
@@ -541,7 +495,7 @@ final class MTStoriesHeader: UIView {
             avatar.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped(_:))))
             addSubview(avatar)
             avatars.append(avatar)
-            let name = MTViews.label(index == 0 ? "Вы" : String(user.person.name.split(separator: " ")[0]),
+            let name = MTViews.label(index == 0 ? "You" : String(user.person.name.split(separator: " ")[0]),
                                      size: 10, color: MTPalette.text)
             name.textAlignment = .center
             addSubview(name)
@@ -658,7 +612,7 @@ final class MTStoriesHeader: UIView {
 
     func setAccount(_ index: Int) {
         UIView.transition(with: title, duration: 0.3, options: .transitionCrossDissolve) {
-            self.title.text = index == 0 ? "Чаты" : "Чаты · \(MTData.accounts[index].person.name.split(separator: " ")[0])"
+            self.title.text = index == 0 ? "Chats" : "Chats · \(MTData.accounts[index].person.name.split(separator: " ")[0])"
         }
         setNeedsLayout()
     }
@@ -707,7 +661,7 @@ final class MTChatCell: UITableViewCell {
                                                        withConfiguration: UIImage.SymbolConfiguration(pointSize: 11)))
     private let kindIcon = UIImageView()
     private let message = MTViews.label(size: 15, color: MTPalette.secondary)
-    private let typingLabel = MTViews.label("печатает", size: 15, color: MTPalette.accent)
+    private let typingLabel = MTViews.label("typing", size: 15, color: MTPalette.accent)
     private let dots = MTTypingDots()
     private let time = MTViews.label(size: 14, color: MTPalette.secondary)
     private let checks = MTChecksView()
@@ -741,11 +695,11 @@ final class MTChatCell: UITableViewCell {
         typingLabel.alpha = 0
         dots.alpha = 0
 
-        leftButtons = [MTSwipeButton(title: "Прочитано", symbol: "checkmark.message.fill", color: MTPalette.accent),
-                       MTSwipeButton(title: "Закрепить", symbol: "pin.fill", color: MTPalette.online)]
-        rightButtons = [MTSwipeButton(title: "Без звука", symbol: "bell.slash.fill", color: MTPalette.orange),
-                        MTSwipeButton(title: "Удалить", symbol: "trash.fill", color: MTPalette.red),
-                        MTSwipeButton(title: "Архив", symbol: "archivebox.fill", color: UIColor(white: 0.6, alpha: 1))]
+        leftButtons = [MTSwipeButton(title: "Read", symbol: "checkmark.message.fill", color: MTPalette.accent),
+                       MTSwipeButton(title: "Pin", symbol: "pin.fill", color: MTPalette.online)]
+        rightButtons = [MTSwipeButton(title: "Mute", symbol: "bell.slash.fill", color: MTPalette.orange),
+                        MTSwipeButton(title: "Delete", symbol: "trash.fill", color: MTPalette.red),
+                        MTSwipeButton(title: "Archive", symbol: "archivebox.fill", color: UIColor(white: 0.6, alpha: 1))]
         let leftActions: [Action] = [.read, .pin], rightActions: [Action] = [.mute, .delete, .archive]
         for (button, action) in zip(leftButtons + rightButtons, leftActions + rightActions) {
             button.addAction(UIAction { [weak self] _ in self?.onAction?(action) }, for: .touchUpInside)
@@ -801,10 +755,10 @@ final class MTChatCell: UITableViewCell {
         badge.muted = chat.muted
         badge.set(chat.unread, animated: animated)
         pinIcon.isHidden = !(chat.pinned && chat.unread == 0)
-        leftButtons[0].set(title: chat.unread > 0 ? "Прочитано" : "Непрочит.",
+        leftButtons[0].set(title: chat.unread > 0 ? "Read" : "Unread",
                            symbol: chat.unread > 0 ? "checkmark.message.fill" : "message.badge.fill")
-        leftButtons[1].set(title: chat.pinned ? "Открепить" : "Закрепить", symbol: chat.pinned ? "pin.slash.fill" : "pin.fill")
-        rightButtons[0].set(title: chat.muted ? "Со звуком" : "Без звука", symbol: chat.muted ? "bell.fill" : "bell.slash.fill")
+        leftButtons[1].set(title: chat.pinned ? "Unpin" : "Pin", symbol: chat.pinned ? "pin.slash.fill" : "pin.fill")
+        rightButtons[0].set(title: chat.muted ? "Unmute" : "Mute", symbol: chat.muted ? "bell.fill" : "bell.slash.fill")
         setTyping(typing, animated: animated)
         setNeedsLayout()
     }
@@ -1042,10 +996,10 @@ final class MTChatPeek: UIView {
         menu.clipsToBounds = true
         menu.frame = CGRect(x: target.maxX - 240, y: target.maxY + 10, width: 240, height: menuHeight)
         let items: [(String, String, MTChatCell.Action, Bool)] = [
-            (chat.unread > 0 ? "Прочитано" : "Непрочитанное", "checkmark.message", .read, false),
-            (chat.pinned ? "Открепить" : "Закрепить", "pin", .pin, false),
-            (chat.muted ? "Включить звук" : "Без звука", "bell.slash", .mute, false),
-            ("Удалить", "trash", .delete, true),
+            (chat.unread > 0 ? "Read" : "Unread", "checkmark.message", .read, false),
+            (chat.pinned ? "Unpin" : "Pin", "pin", .pin, false),
+            (chat.muted ? "Unmute" : "Mute", "bell.slash", .mute, false),
+            ("Delete", "trash", .delete, true),
         ]
         for (index, item) in items.enumerated() {
             let row = UIButton(type: .system)
@@ -1103,12 +1057,12 @@ final class MTChatPeek: UIView {
         let name = MTViews.label(chat.person.name, size: 16, weight: .semibold)
         name.frame = CGRect(x: 58, y: 8, width: 240, height: 20)
         previewHeader.addSubview(name)
-        let status = MTViews.label(chat.online ? "в сети" : "был(а) недавно", size: 13,
+        let status = MTViews.label(chat.online ? "online" : "last seen recently", size: 13,
                                    color: chat.online ? MTPalette.accent : MTPalette.secondary)
         status.frame = CGRect(x: 58, y: 28, width: 240, height: 16)
         previewHeader.addSubview(status)
-        let lines: [(String, Bool)] = [("Привет! Как дела?", false), ("Отлично, делаю демо мини-Telegram 🚀", true),
-                                       ("Покажешь?", false), ("Вечером скину видео", true),
+        let lines: [(String, Bool)] = [("Hey! How are you?", false), ("Great, building a mini-Telegram demo 🚀", true),
+                                       ("Can I see it?", false), ("I’ll send a video tonight", true),
                                        (chat.message.isEmpty ? "👋" : chat.message, chat.outgoingRead != nil)]
         bubbleSides = lines.map(\.1)
         for (text, outgoing) in lines {

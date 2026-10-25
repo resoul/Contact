@@ -197,7 +197,7 @@ final class MTChecksView: UIView {
     }
 }
 
-/// Three dots bouncing one after another: "печатает…".
+/// Three dots bouncing one after another: "is typing…".
 final class MTTypingDots: UIView {
     private var dots: [UIView] = []
 

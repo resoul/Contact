@@ -68,27 +68,29 @@ final class CommentsSheetOverlay: UIView {
 
     private func buildContent(count: Int, people: [ChannelPerson]) {
         let title = UILabel()
-        title.text = "\(count) комментариев"
+        title.text = "\(count) comments"
         title.font = .systemFont(ofSize: 17, weight: .bold)
-        title.textColor = .white
+        title.textColor = .label
         let closeButton = UIButton(type: .system)
         closeButton.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .bold)),
                              for: .normal)
         closeButton.tintColor = .white
         closeButton.backgroundColor = UIColor(white: 1, alpha: 0.12)
         closeButton.layer.cornerRadius = 16
+        closeButton.accessibilityLabel = "Close comments"
+        closeButton.accessibilityIdentifier = "contact.channel.comments.close"
         closeButton.addTarget(self, action: #selector(close), for: .touchUpInside)
         let grabber = UIView()
         grabber.backgroundColor = UIColor(white: 1, alpha: 0.25)
         grabber.layer.cornerRadius = 2.5
 
         let texts = [
-            "Пружины решают. Линейные анимации теперь режут глаз",
-            "А можно такое же стекло для таб-бара?",
-            "Сделали у себя реакции каплями — вовлечённость заметно выросла",
-            "Главное — не переборщить. В ленте должно быть спокойно",
-            "Звёзды с золотой жидкостью выглядят дорого 🔥",
-            "Ждём разбор про пыль на Metal!",
+            "Springs make all the difference. Linear animations are hard to look at now",
+            "Could we get the same glass effect for the tab bar?",
+            "We added droplet reactions and engagement went up noticeably",
+            "The key is not to overdo it. The feed should feel calm",
+            "Stars with golden fluid look premium 🔥",
+            "Looking forward to the Metal dust breakdown!",
         ]
         let list = UIStackView()
         list.axis = .vertical
@@ -107,7 +109,7 @@ final class CommentsSheetOverlay: UIView {
             body.text = text
             body.numberOfLines = 0
             body.font = .systemFont(ofSize: 15)
-            body.textColor = .white
+            body.textColor = .label
             let column = UIStackView(arrangedSubviews: [name, body])
             column.axis = .vertical
             column.spacing = 2
@@ -117,7 +119,7 @@ final class CommentsSheetOverlay: UIView {
             list.addArrangedSubview(row)
         }
         let input = UILabel()
-        input.text = "   Комментарий…"
+        input.text = "   Comment…"
         input.textColor = ChannelPalette.secondaryText
         input.backgroundColor = UIColor(white: 1, alpha: 0.08)
         input.layer.cornerRadius = 20

@@ -9,6 +9,19 @@ bazel_dep(name = "rules_swift", version = "4.1.1")
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
+# Same GRDB release and archive as the physical-device storage benchmark.
+http_archive(
+    name = "grdb_sources",
+    type = "tar.gz",
+    urls = ["https://codeload.github.com/groue/GRDB.swift/tar.gz/b83108d10f42680d78f23fe4d4d80fc88dab3212"],
+    sha256 = "2beeb6962c1d5721707c0fae4bf803ee4d03b84202e16390eda10126fd213cb7",
+    strip_prefix = "GRDB.swift-b83108d10f42680d78f23fe4d4d80fc88dab3212",
+    build_file_content = """
+filegroup(name = "swift_sources", srcs = glob(["GRDB/**/*.swift"]), visibility = ["//visibility:public"])
+exports_files(["GRDB/PrivacyInfo.xcprivacy", "LICENSE"])
+""",
+)
+
 http_archive(
     name = "codec_pkgconf",
     urls = ["https://distfiles.ariadne.space/pkgconf/pkgconf-2.5.1.tar.xz"],

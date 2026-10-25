@@ -42,7 +42,7 @@ private final class StoryPage: UIView {
         avatar.tag = 1
         addSubview(avatar)
         let name = UILabel()
-        name.text = "\(user.person.name)   2 ч"
+        name.text = "\(user.person.name)   2h"
         name.font = .systemFont(ofSize: 14, weight: .semibold)
         name.textColor = .white
         name.tag = 2

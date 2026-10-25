@@ -15,7 +15,7 @@ final class MTAttachSheet: UIView {
     private let dim = UIView()
     private let sheet = UIView()
     private let grabber = UIView()
-    private let title = MTViews.label("Галерея", size: 17, weight: .semibold)
+    private let title = MTViews.label("Gallery", size: 17, weight: .semibold)
     private let closeButton = MTViews.iconButton("xmark.circle.fill", size: 22, tint: MTPalette.secondary)
     private let grid = UIScrollView()
     private let placeholder = UIView()
@@ -23,7 +23,7 @@ final class MTAttachSheet: UIView {
     private let placeholderText = MTViews.label(size: 15, color: MTPalette.secondary)
     private let tabs = LiquidSelector(symbols: ["photo.on.rectangle", "doc", "location", "chart.bar.xaxis", "person.crop.circle"],
                                       style: .tabs, liquid: MTPalette.accent, selectedTint: .white, normalTint: MTPalette.secondary)
-    private let tabTitles = ["Галерея", "Файл", "Геопозиция", "Опрос", "Контакт"]
+    private let tabTitles = ["Gallery", "File", "Location", "Poll", "Contact"]
     private var tabLabels: [UILabel] = []
     private let sendBar = UIView()
     private let caption = UITextField()
@@ -105,7 +105,7 @@ final class MTAttachSheet: UIView {
         captionBox.backgroundColor = MTPalette.fill
         captionBox.layer.cornerRadius = 19
         sendBar.addSubview(captionBox)
-        caption.placeholder = "Добавить подпись…"
+        caption.placeholder = "Add a caption…"
         caption.font = .systemFont(ofSize: 16)
         caption.textColor = MTPalette.text
         caption.frame = captionBox.bounds.insetBy(dx: 14, dy: 0)
@@ -209,7 +209,7 @@ final class MTAttachSheet: UIView {
             self.tabs.alpha = showSend ? 0 : 1
             self.tabLabels.forEach { $0.alpha = showSend ? 0 : 1 }
         }
-        title.text = showSend ? "Выбрано: \(selection.count)" : "Галерея"
+        title.text = showSend ? "Selected: \(selection.count)" : "Gallery"
     }
 
     @objc private func tabChanged() {
@@ -218,10 +218,10 @@ final class MTAttachSheet: UIView {
             label.textColor = labelIndex == index ? MTPalette.accent : MTPalette.secondary
         }
         title.text = tabTitles[index]
-        let content: [(String, String)] = [("", ""), ("doc.fill", "Отправьте файл до 4 ГБ"),
-                                           ("location.circle.fill", "Ваша геопозиция\nили трансляция на 8 часов"),
-                                           ("chart.bar.fill", "Опрос или викторина\nс вариантами ответа"),
-                                           ("person.crop.circle.fill", "Поделитесь контактом из телефонной книги")]
+        let content: [(String, String)] = [("", ""), ("doc.fill", "Send a file up to 4 GB"),
+                                           ("location.circle.fill", "Your location\nor live for 8 hours"),
+                                           ("chart.bar.fill", "Poll or quiz\nwith answer choices"),
+                                           ("person.crop.circle.fill", "Share a contact from your address book")]
         placeholderIcon.image = UIImage(systemName: content[index].0, withConfiguration: UIImage.SymbolConfiguration(pointSize: 46))
         placeholderText.text = content[index].1
         UIView.animate(withDuration: 0.25) {

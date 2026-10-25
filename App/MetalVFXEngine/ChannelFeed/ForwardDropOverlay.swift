@@ -12,6 +12,8 @@
 import UIKit
 
 final class ForwardDropOverlay: UIView {
+    var onSend: ((ChannelPerson, @escaping () -> Void) -> Void)?
+    private var saving = false
     private let canvas = LiquidCanvasView()
     private let origin: CGPoint
     private let thumbnail = UIImageView()
@@ -66,7 +68,7 @@ final class ForwardDropOverlay: UIView {
             row.addSubview(name)
             contacts.append((avatar, name, person))
         }
-        hint.text = "Перетащите пост на контакт"
+        hint.text = "Drag a post to a contact"
         hint.font = .systemFont(ofSize: 13, weight: .semibold)
         hint.textColor = .white
         hint.sizeToFit()
@@ -152,6 +154,14 @@ final class ForwardDropOverlay: UIView {
     }
 
     private func send(to index: Int) {
+        guard !saving, !finished else { return }
+        if let onSend {
+            saving = true
+            onSend(contacts[index].person) { [weak self] in self?.completeSend(to: index) }
+        } else { completeSend(to: index) }
+    }
+
+    private func completeSend(to index: Int) {
         sentTo = index
         snapTime = clock
         finished = true
@@ -238,7 +248,7 @@ final class ForwardDropOverlay: UIView {
         UIView.animate(withDuration: 0.4, delay: 0.1, usingSpringWithDamping: 0.45, initialSpringVelocity: 0.6) {
             check.transform = .identity
         }
-        hint.text = "Отправлено: \(contacts[index].person.name)"
+        hint.text = "Sent to \(contacts[index].person.name)"
         hint.sizeToFit()
         hint.center.x = bounds.midX
         UIView.animate(withDuration: 0.25) { self.hint.alpha = 1 }

@@ -67,7 +67,7 @@ final class ReactionPickerOverlay: UIView {
     private var picked: Int?
     private let selection = UISelectionFeedbackGenerator()
 
-    private let slot: CGFloat = 44
+    private let slot: CGFloat
     private let rowHeight: CGFloat = 54
     /// Columns of the bar: the quick emoji plus the ⌄ button. The grid uses the same columns.
     private var columns: Int { quickCount + 1 }
@@ -75,6 +75,8 @@ final class ReactionPickerOverlay: UIView {
     /// `bubble` is the pressed post (snapshotted so it stays above the dim), `point` the finger, both in
     /// `host`. `emojis` is the quick row; `more` fills the accordion.
     init(in host: UIView, bubble: UIView, at point: CGPoint, emojis: [String], more: [String]) {
+        let slot = min(CGFloat(44), (host.bounds.width - 30) / CGFloat(emojis.count + 1))
+        self.slot = slot
         self.emojis = emojis + more
         quickCount = emojis.count
         touchPoint = point
@@ -116,6 +118,9 @@ final class ReactionPickerOverlay: UIView {
         for (index, emoji) in self.emojis.enumerated() {
             let label = UILabel()
             label.text = emoji
+            label.isAccessibilityElement = true
+            label.accessibilityTraits = .button
+            label.accessibilityIdentifier = "contact.channel.picker.\(emoji)"
             label.font = .systemFont(ofSize: index < quickCount ? 30 : 27)
             label.sizeToFit()
             label.alpha = 0
@@ -128,6 +133,10 @@ final class ReactionPickerOverlay: UIView {
         moreButton.bounds = CGRect(x: 0, y: 0, width: 30, height: 30)
         moreButton.layer.cornerRadius = 15
         moreButton.isUserInteractionEnabled = false
+        moreButton.isAccessibilityElement = true
+        moreButton.accessibilityTraits = .button
+        moreButton.accessibilityLabel = "More reactions"
+        moreButton.accessibilityIdentifier = "contact.channel.picker.more"
         chevron.tintColor = .white
         chevron.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 13, weight: .bold)
         chevron.sizeToFit()
@@ -140,6 +149,10 @@ final class ReactionPickerOverlay: UIView {
         trashIcon.sizeToFit()
         trashIcon.center = trashCenter
         trashIcon.alpha = 0
+        trashIcon.isAccessibilityElement = true
+        trashIcon.accessibilityTraits = .button
+        trashIcon.accessibilityLabel = "Delete post"
+        trashIcon.accessibilityIdentifier = "contact.channel.picker.delete"
         addSubview(trashIcon)
 
         finger = point
@@ -250,6 +263,7 @@ final class ReactionPickerOverlay: UIView {
     private func setExpanded(_ open: Bool) {
         guard !closing, open != expanded else { return }
         expanded = open
+        moreButton.accessibilityLabel = open ? "Collapse reactions" : "More reactions"
         expandTime = 0
         selected = nil
         // The jelly kick: the bottom edge is flung so it overshoots and wobbles.

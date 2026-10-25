@@ -34,7 +34,7 @@ final class MTInputBar: UIView, UITextViewDelegate {
     private let attach = MTViews.iconButton("paperclip", size: 21, tint: MTPalette.secondary)
     private let fieldBox = UIView()
     private let textView = UITextView()
-    private let placeholder = MTViews.label("Сообщение", size: 16, color: MTPalette.secondary)
+    private let placeholder = MTViews.label("Message", size: 16, color: MTPalette.secondary)
     private let emojiButton = UIButton(type: .system)
     private let action = UIImageView()
     private let actionTap = UIButton(type: .custom)
@@ -95,9 +95,9 @@ final class MTInputBar: UIView, UITextViewDelegate {
         fieldBox.layer.borderColor = MTPalette.separator.cgColor
         addSubview(fieldBox)
         textView.accessibilityIdentifier = "contact.composer"
-        textView.accessibilityLabel = "Сообщение"
+        textView.accessibilityLabel = "Message"
         actionTap.accessibilityIdentifier = "contact.send"
-        actionTap.accessibilityLabel = "Голосовое сообщение"
+        actionTap.accessibilityLabel = "Voice message"
         textView.font = .systemFont(ofSize: 16)
         textView.textColor = MTPalette.text
         textView.backgroundColor = .clear
@@ -332,7 +332,7 @@ final class MTInputBar: UIView, UITextViewDelegate {
     // MARK: Action button
 
     private func updateAction() {
-        actionTap.accessibilityLabel = hasText ? (editing ? "Сохранить" : "Отправить") : (videoMode ? "Видеосообщение" : "Голосовое сообщение")
+        actionTap.accessibilityLabel = hasText ? (editing ? "Save" : "Send") : (videoMode ? "Video message" : "Voice message")
         let symbol = hasText ? (overLimit ? "exclamationmark.circle.fill" : (editing ? "checkmark.circle.fill" : "arrow.up.circle.fill"))
             : (videoMode ? "video" : "mic")
         let image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: hasText ? 30 : 22, weight: .regular))!

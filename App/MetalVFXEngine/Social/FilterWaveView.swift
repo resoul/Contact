@@ -23,11 +23,11 @@ private struct FilterWaveUniforms {
 }
 
 enum PhotoFilter: String, CaseIterable {
-    case original = "Оригинал"
-    case warm = "Тёплый"
-    case noir = "Нуар"
-    case vintage = "Винтаж"
-    case neon = "Неон"
+    case original = "Original"
+    case warm = "Warm"
+    case noir = "Noir"
+    case vintage = "Vintage"
+    case neon = "Neon"
 
     private static let context = CIContext()
 

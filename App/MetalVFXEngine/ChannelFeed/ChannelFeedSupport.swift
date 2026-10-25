@@ -11,7 +11,7 @@ import UIKit
 
 // MARK: - Model
 
-struct ChannelPerson {
+struct ChannelPerson: Codable {
     let name: String
     let hue: CGFloat
 
@@ -20,7 +20,7 @@ struct ChannelPerson {
     }
 }
 
-struct ChannelReaction {
+struct ChannelReaction: Codable {
     let emoji: String
     var count: Int
     var chosen = false
@@ -28,7 +28,8 @@ struct ChannelReaction {
     var isStar: Bool { emoji == "⭐" }
 }
 
-struct ChannelPost {
+struct ChannelPost: Codable {
+    var image: DemoPhotos.Scene? = nil
     var quote: String?
     var body: String
     var source: String?
@@ -41,11 +42,12 @@ struct ChannelPost {
 }
 
 enum ChannelPalette {
-    static let bubble = UIColor(red: 0.16, green: 0.145, blue: 0.21, alpha: 1)
+    static let bubble = UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0.16, green: 0.145, blue: 0.21, alpha: 1) : .secondarySystemBackground }
     static let accent = UIColor(red: 0.33, green: 0.58, blue: 1.0, alpha: 1)
     static let name = UIColor(red: 0.42, green: 0.80, blue: 0.85, alpha: 1)
     static let star = UIColor(red: 1.0, green: 0.76, blue: 0.20, alpha: 1)
-    static let secondaryText = UIColor(white: 1, alpha: 0.5)
+    static let secondaryText = UIColor.secondaryLabel
     static let picker = UIColor(red: 0.20, green: 0.19, blue: 0.25, alpha: 1)
 }
 
@@ -214,6 +216,14 @@ final class FeedLiquidLayer: LiquidCanvasView {
     func add(_ actor: @escaping Actor) {
         actors.append(actor)
         isPaused = false
+    }
+
+    func stop() {
+        actors.removeAll()
+        shapes = []
+        spikes = []
+        renderFrame()
+        isPaused = true
     }
 
     override func update(deltaTime: CFTimeInterval) {

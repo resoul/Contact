@@ -11,9 +11,9 @@ let trickPeople = [
 
 enum MTData {
     static let accounts = [
-        MTAccount(person: ChannelPerson(name: "Максим Ветров", hue: 0.6), phone: "+7 912 345-67-89", username: "@vetrov"),
-        MTAccount(person: ChannelPerson(name: "Студия Ветров", hue: 0.83), phone: "+7 900 111-22-33", username: "@vetrov_studio"),
-        MTAccount(person: ChannelPerson(name: "Макс Тест", hue: 0.12), phone: "+44 7700 900123", username: "@max_test"),
+        MTAccount(id: UUID(uuidString: "e385df1b-e640-40d2-bc78-d5556e6484b1")!, person: ChannelPerson(name: "Максим Ветров", hue: 0.6), phone: "+7 912 345-67-89", username: "@vetrov"),
+        MTAccount(id: UUID(uuidString: "0c158ca4-230c-4688-9f84-dc8690182eba")!, person: ChannelPerson(name: "Студия Ветров", hue: 0.83), phone: "+7 900 111-22-33", username: "@vetrov_studio"),
+        MTAccount(id: UUID(uuidString: "f8292fc4-0abd-4d9e-a1c8-eb94de3648e3")!, person: ChannelPerson(name: "Макс Тест", hue: 0.12), phone: "+44 7700 900123", username: "@max_test"),
     ]
 
     static let storyUsers: [StoryUser] = trickPeople.prefix(7).enumerated().map { index, person in
@@ -25,35 +25,34 @@ enum MTData {
     static func chats(for account: Int) -> [MTChat] {
         let people = trickPeople
         var chats: [MTChat] = [
-            MTChat(id: 0, person: ChannelPerson(name: "Дизайн-команда", hue: 0.45), kind: .group,
-                   message: "Анна: макеты таб-бара готовы, гляньте 👀", time: "21:04", unread: 12, pinned: true),
-            MTChat(id: 1, person: people[0], kind: .person, message: "Завтра в 10 созвон, не забудь", time: "20:51",
+            MTChat(id: 0, person: ChannelPerson(name: "Design Team", hue: 0.45), kind: .group,
+                   message: "Anna: the tab bar mockups are ready, take a look 👀", time: "21:04", unread: 12, pinned: true),
+            MTChat(id: 1, person: people[0], kind: .person, message: "Call tomorrow at 10, don’t forget", time: "20:51",
                    unread: 2, online: true),
-            MTChat(id: 2, person: people[1], kind: .person, message: "Отправил тебе файлы", time: "20:30",
+            MTChat(id: 2, person: people[1], kind: .person, message: "I sent you the files", time: "20:30",
                    outgoingRead: false),
-            MTChat(id: 3, person: ChannelPerson(name: "Metal Weekly", hue: 0.02), kind: .channel,
-                   message: "Шейдеры SDF: как сделать жидкость за 40 строк", time: "19:12", unread: 48, muted: true),
-            MTChat(id: 4, person: people[2], kind: .person, message: "Ахах, это лучшее 😂", time: "18:40", online: true),
-            MTChat(id: 5, person: ChannelPerson(name: "Погода Бот", hue: 0.55), kind: .bot,
-                   message: "☀️ Завтра +18°, без осадков", time: "18:00", unread: 1),
-            MTChat(id: 6, person: people[3], kind: .person, message: "Ок, договорились", time: "17:22", outgoingRead: true),
+            channelExamples[0],
+            MTChat(id: 4, person: people[2], kind: .person, message: "Haha, this is the best 😂", time: "18:40", online: true),
+            MTChat(id: 5, person: ChannelPerson(name: "Weather Bot", hue: 0.55), kind: .bot,
+                   message: "☀️ Tomorrow: 18°, no rain", time: "18:00", unread: 1),
+            MTChat(id: 6, person: people[3], kind: .person, message: "Okay, it’s a deal", time: "17:22", outgoingRead: true),
             MTChat(id: 7, person: ChannelPerson(name: "iOS Dev Chat", hue: 0.7), kind: .group,
-                   message: "Игорь: кто пробовал iOS 27 beta?", time: "16:05", unread: 5, muted: true),
-            MTChat(id: 8, person: people[4], kind: .person, message: "Фото с выходных 📷", time: "15:47", unread: 3),
-            MTChat(id: 9, person: ChannelPerson(name: "Новости Tech", hue: 0.1), kind: .channel,
-                   message: "Apple показала новые MacBook", time: "14:30", unread: 210, muted: true),
-            MTChat(id: 10, person: people[5], kind: .person, message: "Голосовое сообщение", time: "13:02", outgoingRead: true),
-            MTChat(id: 11, person: ChannelPerson(name: "Такси Бот", hue: 0.15), kind: .bot,
-                   message: "Ваша поездка завершена. Оцените водителя", time: "12:15"),
-            MTChat(id: 12, person: people[6], kind: .person, message: "Спасибо!", time: "Вчера", online: true),
-            MTChat(id: 13, person: people[7], kind: .person, message: "Где встречаемся?", time: "Вчера", unread: 1),
-            MTChat(id: 14, person: people[8], kind: .person, message: "Стикер", time: "Пн", outgoingRead: true),
-            MTChat(id: 15, person: people[9], kind: .person, message: "До встречи 👋", time: "Вс"),
+                   message: "Igor: has anyone tried iOS 27 beta?", time: "16:05", unread: 5, muted: true),
+            MTChat(id: 8, person: people[4], kind: .person, message: "Photos from the weekend 📷", time: "15:47", unread: 3),
+            channelExamples[1],
+            MTChat(id: 10, person: people[5], kind: .person, message: "Voice message", time: "13:02", outgoingRead: true),
+            MTChat(id: 11, person: ChannelPerson(name: "Taxi Bot", hue: 0.15), kind: .bot,
+                   message: "Your ride is complete. Rate your driver", time: "12:15"),
+            MTChat(id: 12, person: people[6], kind: .person, message: "Thanks!", time: "Yesterday", online: true),
+            MTChat(id: 13, person: people[7], kind: .person, message: "Where should we meet?", time: "Yesterday", unread: 1),
+            MTChat(id: 14, person: people[8], kind: .person, message: "Sticker", time: "Mon", outgoingRead: true),
+            MTChat(id: 15, person: people[9], kind: .person, message: "See you 👋", time: "Sun"),
         ]
+        chats += Array(channelExamples.dropFirst(2))
         guard account > 0 else { return chats }
         // Other accounts: another order, other counters, fewer chats.
         var generator = SplitMix(seed: UInt64(account * 977))
-        chats = chats.filter { _ in generator.next() > 0.3 }
+        chats = chats.filter { $0.kind == .channel || generator.next() > 0.3 }
         for index in chats.indices {
             chats[index].unread = generator.next() > 0.5 ? Int(generator.next() * 30) : 0
             chats[index].pinned = index == 0
@@ -63,10 +62,10 @@ enum MTData {
     }
 
     static let pinnedMessages = [
-        "📌 Правила чата: без спама",
-        "Ссылка на макеты в Figma",
-        "Созвон по пятницам в 11:00",
-        "Релиз 2.0 — 1 ноября 🚀",
+        "📌 Chat rules: no spam",
+        "Link to the Figma designs",
+        "Friday call at 11:00",
+        "Release 2.0 — November 1 🚀",
     ]
 }
 

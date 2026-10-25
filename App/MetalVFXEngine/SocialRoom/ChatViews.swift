@@ -431,7 +431,7 @@ final class TypingDots: UIView {
         canvas.rimWidth = 3
         canvas.onUpdate = { [weak self] dt in self?.step(dt) }
         addSubview(canvas)
-        label.text = "\(name) печатает…"
+        label.text = "\(name) is typing…"
         label.font = .systemFont(ofSize: 14)
         label.textColor = RoomPalette.secondary
         addSubview(label)
@@ -504,7 +504,7 @@ final class RecordBlob: UIView {
         timer.font = .monospacedDigitSystemFont(ofSize: 16, weight: .medium)
         timer.textColor = .white
         addSubview(timer)
-        hint.text = "‹  Сдвиньте для отмены"
+        hint.text = "‹  Slide to cancel"
         hint.font = .systemFont(ofSize: 15)
         hint.textColor = RoomPalette.secondary
         hint.sizeToFit()

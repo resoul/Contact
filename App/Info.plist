@@ -45,6 +45,6 @@
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Contact использует микрофон для голосовых сообщений и звонков.</string>
+    <string>Contact uses the microphone for voice messages and calls.</string>
 </dict>
 </plist>

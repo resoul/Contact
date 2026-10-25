@@ -61,7 +61,7 @@ final class MTCallViewController: UIViewController {
         name.text = person.name
         name.textAlignment = .center
         view.addSubview(name)
-        status.text = "Вызов…"
+        status.text = "Calling…"
         status.textAlignment = .center
         view.addSubview(status)
 
@@ -74,7 +74,7 @@ final class MTCallViewController: UIViewController {
         keyPanel.backgroundColor = UIColor(white: 0, alpha: 0.25)
         keyPanel.layer.cornerRadius = 22
         keyPanel.alpha = 0
-        let keyText = MTViews.label("Звонок зашифрован.\nЕсли эмодзи у собеседника такие же — его никто не слушает.",
+        let keyText = MTViews.label("Your call is encrypted.\nIf your emojis match, no one else can listen.",
                                     size: 15, color: .white)
         keyText.numberOfLines = 0
         keyText.textAlignment = .center
@@ -82,10 +82,10 @@ final class MTCallViewController: UIViewController {
         keyPanel.addSubview(keyText)
         view.addSubview(keyPanel)
 
-        let items: [(String, String, UIColor)] = [("speaker.wave.2.fill", "динамик", MTPalette.glass),
-                                                   ("video.fill", "видео", MTPalette.glass),
-                                                   ("mic.slash.fill", "без звука", MTPalette.glass),
-                                                   ("phone.down.fill", "завершить", MTPalette.red)]
+        let items: [(String, String, UIColor)] = [("speaker.wave.2.fill", "speaker", MTPalette.glass),
+                                                   ("video.fill", "video", MTPalette.glass),
+                                                   ("mic.slash.fill", "mute", MTPalette.glass),
+                                                   ("phone.down.fill", "end", MTPalette.red)]
         for (index, item) in items.enumerated() {
             let button = UIButton(type: .system)
             button.setImage(UIImage(systemName: item.0, withConfiguration: UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)),
@@ -214,7 +214,7 @@ final class MTCallViewController: UIViewController {
         guard !ended else { return }
         ended = true
         timer?.invalidate()
-        status.text = "Звонок завершён"
+        status.text = "Call ended"
         blobs.fade()
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         for (index, button) in buttons.enumerated() {

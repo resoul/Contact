@@ -72,7 +72,7 @@ final class MTMessageMenu: UIView {
             label.textAlignment = .center
             label.isUserInteractionEnabled = true
             label.isAccessibilityElement = true
-            label.accessibilityLabel = emoji == MTReactions.gas ? "Газ" : emoji
+            label.accessibilityLabel = emoji == MTReactions.gas ? "Gas" : emoji
             label.accessibilityTraits = .button
             label.tag = index
             label.transform = CGAffineTransform(scaleX: 0.1, y: 0.1)

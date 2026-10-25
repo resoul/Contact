@@ -9,7 +9,6 @@
 import UIKit
 import Metal
 
-/// Device, queue, shader library and pipeline caches shared by every VFX view.
 final class VFXGPU {
     static let shared = VFXGPU()
 
@@ -30,8 +29,6 @@ final class VFXGPU {
         self.library = library
     }
 
-    /// Pipelines blend premultiplied alpha, so transparent overlays composite over UIKit correctly.
-    /// `format` defaults to `pixelFormat`; HDR views pass their extended-range format.
     func renderPipeline(vertex: String, fragment: String, format: MTLPixelFormat? = nil) -> MTLRenderPipelineState? {
         let format = format ?? pixelFormat
         let key = vertex + "|" + fragment + "|\(format.rawValue)"
