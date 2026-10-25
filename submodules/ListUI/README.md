@@ -40,9 +40,9 @@ frames; ASTextNode renders text through AsyncDisplayKit. It is not Telegram's
 full asynchronous measurement pipeline or a chat-history engine. Long-history
 anchoring, media preloading and chat-specific grouping are future extensions.
 
-`App/Messenger/ListDemo` is a consumer example with independent in-memory data.
-Open Settings → List Demo. Its Tags button adds/removes three folder pages;
-Plus inserts a row, and the update icon modifies a row on the selected page.
+Contact's consumers are `App/Messenger/ChatList` and `App/Messenger/Profile`.
+The profile composes an app-owned photo/header, a pinchable media grid and
+attachment lists. The original standalone Settings demo has been removed.
 
 ## Collapsing header and component composition
 
@@ -63,9 +63,29 @@ coordinator, and motion stops when the screen leaves or the app resigns active.
 updates, external scroll requests and interaction cancellation. `ListPane`
 adapts `ListView`. A grid can supply another adapter without importing any
 profile or chat data into ListUI. Accessibility up/down scrolling requests also
-pass through the shared driver. Returning to a previously scrolled pane keeps its
-offset and collapses the common header so that its content remains coherent.
+pass through the shared driver. While the common header is collapsed, returning
+to a pane preserves its offset. Revealing the header resets every pane to the
+top, including saved offsets of evicted pages, so switching tabs cannot restore
+old content underneath an expanded profile.
 
-The demo's `DemoProfileHeaderNode` provides an avatar, bio and three independent
-buttons. The Tags toggle works both with and without the collapsing header; no
-extra tap is needed to initialize the vertical scroll driver.
+`CollapsingListContainerNode.pinnedTopInset` reserves room for the app's
+overlaid navigation bar. Updating its header height with
+`preservingContentPosition: true` supports an animated expanding profile photo
+without interrupting the shared motion. `ListPagerNode.setTabsNode(_:height:)`
+lets an app keep its own selector in the pinned tab area.
+
+## Existing UIKit rows and application chrome
+
+`ListItemNode` exposes interaction and selection-failure gesture hooks so an
+existing UIKit row can keep its controls and long press while being virtualized
+by ListUI. `closeInteractions` and `blocksHorizontalPaging` integrate custom row
+controls with selection and scrolling. `ListView.itemNode(for:)` locates a loaded
+row by its stable identity for previews and app-owned effects.
+
+`ListView.contentInsets`, scrolling callbacks and the proposed target-offset
+callback let an app keep an existing navigation/story header. `ListPane` exposes
+normalized offsets (zero means the top including insets). `ListPagerNode` can
+hide its built-in tabs, report page progress, accept external page selection and
+use full-width horizontal paging. By default, paging uses the center/edge
+gesture policy described above. Contact's chat controller uses these hooks to
+preserve its existing navigation and row design.

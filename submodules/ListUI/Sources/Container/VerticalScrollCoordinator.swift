@@ -12,6 +12,7 @@ public final class VerticalScrollCoordinator {
     public var isBouncing: Bool { abs(rawOverscroll) > 0.1 }
     public var topStretch: CGFloat { max(0, -elasticOffset) }
     public var collapseFraction: CGFloat { headerHeight > 0 ? headerOffset / headerHeight : 1 }
+    public var isHeaderVisible: Bool { headerOffset < headerHeight - 0.5 }
 
     private var elasticOffset: CGFloat {
         let distance = abs(rawOverscroll)
@@ -22,10 +23,15 @@ public final class VerticalScrollCoordinator {
 
     public init(headerHeight: CGFloat) { self.headerHeight = max(0, headerHeight) }
 
-    public func setHeaderHeight(_ height: CGFloat) {
+    public func setHeaderHeight(_ height: CGFloat, preservingContentPosition: Bool = false) {
         let wasCollapsed = headerOffset >= headerHeight - 0.5
+        let difference = max(0, height) - headerHeight
         headerHeight = max(0, height)
-        headerOffset = wasCollapsed ? headerHeight : min(headerOffset, headerHeight)
+        if preservingContentPosition, headerOffset > 0 {
+            headerOffset = min(headerHeight, max(0, headerOffset + difference))
+        } else {
+            headerOffset = wasCollapsed ? headerHeight : min(headerOffset, headerHeight)
+        }
         render()
     }
 
@@ -34,7 +40,8 @@ public final class VerticalScrollCoordinator {
         pane?.setVerticalOffset(paneOffset)
         rawOverscroll = 0
         pane = next
-        paneOffset = min(max(0, next?.verticalOffset ?? 0), next?.maximumVerticalOffset ?? 0)
+        // A pane can restore its position only while the shared header is collapsed.
+        paneOffset = isHeaderVisible ? 0 : min(max(0, next?.verticalOffset ?? 0), next?.maximumVerticalOffset ?? 0)
 
         if paneOffset > 0 { headerOffset = headerHeight }
         render()

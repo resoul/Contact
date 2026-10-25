@@ -11,6 +11,9 @@ public final class CollapsingListContainerNode: ASDisplayNode, UIGestureRecogniz
     public let pager: ListPagerNode
     public let coordinator: VerticalScrollCoordinator
     public var headerProgressChanged: ((CGFloat) -> Void)?
+    /// Space reserved for an overlaid navigation bar when the header is collapsed.
+    public var pinnedTopInset: CGFloat = 0 { didSet { setNeedsLayout() } }
+    public var isDragging: Bool { verticalPan?.state == .began || verticalPan?.state == .changed }
     private var verticalPan: UIPanGestureRecognizer!
     private var previousTranslation: CGFloat = 0
     private weak var activePane: (any ScrollablePane)?
@@ -57,13 +60,13 @@ public final class CollapsingListContainerNode: ASDisplayNode, UIGestureRecogniz
 
     public override func layout() {
         super.layout()
-        coordinator.viewportHeight = bounds.height
+        coordinator.viewportHeight = max(0, bounds.height - pinnedTopInset)
         placeContent()
     }
 
-    public func setHeaderHeight(_ height: CGFloat) {
-        stopMotion()
-        coordinator.setHeaderHeight(height)
+    public func setHeaderHeight(_ height: CGFloat, preservingContentPosition: Bool = false) {
+        if !preservingContentPosition { stopMotion() }
+        coordinator.setHeaderHeight(height, preservingContentPosition: preservingContentPosition)
     }
 
     private func activate(_ pane: (any ScrollablePane)?) {
@@ -78,11 +81,12 @@ public final class CollapsingListContainerNode: ASDisplayNode, UIGestureRecogniz
     }
 
     private func placeContent() {
+        if coordinator.isHeaderVisible { pager.resetScrollPositions() }
         let stretch = coordinator.topStretch
         header.frame = CGRect(x: 0, y: -coordinator.headerOffset + stretch,
-                              width: bounds.width, height: coordinator.headerHeight)
-        pager.frame = CGRect(x: 0, y: coordinator.headerHeight - coordinator.headerOffset + stretch,
-                             width: bounds.width, height: bounds.height)
+                              width: bounds.width, height: coordinator.headerHeight + pinnedTopInset)
+        pager.frame = CGRect(x: 0, y: pinnedTopInset + coordinator.headerHeight - coordinator.headerOffset + stretch,
+                             width: bounds.width, height: max(0, bounds.height - pinnedTopInset))
         headerProgressChanged?(coordinator.collapseFraction)
     }
 

@@ -118,6 +118,7 @@ final class LiquidSelector: UIControl {
     enum Style { case tabs, segments }
 
     private(set) var selectedIndex = 0
+    private var interactivePosition: CGFloat?
     private let style: Style
     private let canvas = LiquidCanvasView()
     private var items: [UIView] = []
@@ -185,6 +186,8 @@ final class LiquidSelector: UIControl {
     }
 
     func select(_ index: Int, animated: Bool = true) {
+        interactivePosition = nil
+        canvas.isPaused = false
         guard index != selectedIndex, items.indices.contains(index) else { return }
         selectedIndex = index
         if !animated {
@@ -192,6 +195,11 @@ final class LiquidSelector: UIControl {
             tail.value = CGFloat(index)
         }
         UIView.transition(with: self, duration: 0.2, options: .transitionCrossDissolve) { self.tint() }
+        canvas.isPaused = false
+    }
+
+    func setInteractivePosition(_ position: CGFloat) {
+        interactivePosition = min(max(0, position), CGFloat(max(0, items.count - 1)))
         canvas.isPaused = false
     }
 
@@ -205,7 +213,7 @@ final class LiquidSelector: UIControl {
     }
 
     private func step(_ dt: CFTimeInterval) {
-        let target = CGFloat(selectedIndex)
+        let target = interactivePosition ?? CGFloat(selectedIndex)
         head.step(toward: target, deltaTime: dt)
         tail.step(toward: target, deltaTime: dt)
         let inset: CGFloat = style == .tabs ? 4 : 3

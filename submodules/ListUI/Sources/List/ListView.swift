@@ -3,6 +3,13 @@ import AsyncDisplayKit
 
 private final class ListScrollView: UIScrollView {
     var externalScroll: ((CGFloat) -> Void)?
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === panGestureRecognizer {
+            let velocity = panGestureRecognizer.velocity(in: self)
+            return abs(velocity.y) >= abs(velocity.x)
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         guard let externalScroll else { return super.accessibilityScroll(direction) }
         switch direction {
@@ -18,6 +25,16 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     public var theme: ListTheme { didSet { if theme != oldValue { invalidatePresentation() } } }
     public var hasPages = false
     public var contentGeometryChanged: (() -> Void)?
+    public var scrollingChanged: ((ListView) -> Void)?
+    public var scrollingBegan: ((ListView) -> Void)?
+    public var scrollingTarget: ((ListView, CGPoint, CGPoint) -> CGPoint)?
+    public var contentInsets: UIEdgeInsets = .zero {
+        didSet {
+            guard isNodeLoaded, contentInsets != oldValue else { return }
+            scrollView.contentInset = contentInsets
+            scrollView.verticalScrollIndicatorInsets = contentInsets
+        }
+    }
     var pagingRecognizer: UIGestureRecognizer?
     var gestureLocation: ((UIView, CGPoint) -> (CGFloat, CGFloat))?
     private var items: [any ListItem] = []
@@ -34,7 +51,7 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     private var externalScrollDriver: ((CGFloat) -> Void)?
     private var renderedTraits: UITraitCollection?
     public var contentOffset: CGFloat {
-        get { isNodeLoaded ? scrollView.contentOffset.y : pendingOffset ?? 0 }
+        get { pendingOffset ?? (isNodeLoaded ? scrollView.contentOffset.y : 0) }
         set {
             if isNodeLoaded && layoutWidth > 0 {
                 restoreOffset(newValue)
@@ -44,7 +61,8 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
             }
         }
     }
-    public var hasOpenReveal: Bool { active.values.contains { ($0 as? RevealableItemNode)?.isRevealOpen == true } }
+    public var hasOpenReveal: Bool { active.values.contains { $0.blocksHorizontalPaging } }
+    public func itemNode(for id: String) -> ListItemNode? { active[id] }
 
     public init(theme: ListTheme) {
         self.theme = theme
@@ -63,11 +81,12 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.keyboardDismissMode = .onDrag
         scrollView.backgroundColor = theme.background
+        scrollView.contentInset = contentInsets
+        scrollView.verticalScrollIndicatorInsets = contentInsets
         tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         tapRecognizer.delegate = self
         scrollView.addGestureRecognizer(tapRecognizer)
         if let pagingRecognizer {
-            scrollView.panGestureRecognizer.require(toFail: pagingRecognizer)
             tapRecognizer.require(toFail: pagingRecognizer)
         }
         applyScrollDriver()
@@ -148,7 +167,14 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     }
 
     private func restoreOffset(_ offset: CGFloat) {
-        scrollView.contentOffset.y = min(max(0, offset), max(0, scrollView.contentSize.height - bounds.height))
+        let minimum = -contentInsets.top
+        let maximum = max(minimum, scrollView.contentSize.height + contentInsets.bottom - bounds.height)
+        scrollView.contentOffset.y = min(max(minimum, offset), maximum)
+    }
+
+    func setDrivenContentOffset(_ offset: CGFloat) {
+        if !isNodeLoaded || layoutWidth == 0 { pendingOffset = offset }
+        else { scrollView.setContentOffset(CGPoint(x: 0, y: offset), animated: false) }
     }
 
     private func updateVisible(inserted: Set<String> = [], animated: Bool = false) {
@@ -194,6 +220,12 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     }
 
     private func configureGestures(_ node: ListItemNode) {
+        for gesture in node.interactionPanGestures {
+            scrollView.panGestureRecognizer.require(toFail: gesture)
+        }
+        for gesture in node.selectionFailureGestures {
+            tapRecognizer?.require(toFail: gesture)
+        }
         guard let reveal = node as? RevealableItemNode else { return }
         reveal.requirePagingFailure(pagingRecognizer)
         scrollView.panGestureRecognizer.require(toFail: reveal.revealRecognizer)
@@ -226,15 +258,25 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
         return active.values.first { $0.frame.contains(location) }
     }
 
-    public func closeReveals(except: RevealableItemNode? = nil, animated: Bool = true) {
+    public func closeReveals(except: ListItemNode? = nil, animated: Bool = true) {
         for node in active.values {
-            guard let reveal = node as? RevealableItemNode, reveal !== except else { continue }
-            reveal.closeReveal(animated: animated)
+            guard node !== except else { continue }
+            node.closeInteractions(animated: animated)
         }
     }
 
-    public func scrollViewDidScroll(_ scrollView: UIScrollView) { updateVisible() }
-    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) { closeReveals() }
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateVisible()
+        scrollingChanged?(self)
+    }
+    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        closeReveals()
+        scrollingBegan?(self)
+    }
+    public func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                         targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        if let scrollingTarget { targetContentOffset.pointee = scrollingTarget(self, velocity, targetContentOffset.pointee) }
+    }
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         var target = touch.view

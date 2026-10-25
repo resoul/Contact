@@ -94,7 +94,7 @@ submodules/MozjpegBinding/    JPEG/JPEG XL APIs and stripped thumbnails
 submodules/ImageCompression/ Swift image compression helpers
 submodules/ContactStorage/   Account databases, Keychain, migrations and observed queries
 submodules/ListUI/           Node-based lists, folder paging, and row swipe actions
-App/Messenger/ListDemo/      In-memory consumer example opened from Settings
+App/Messenger/Profile/       Profile header, media grid and ListUI attachment panes
 cache/                       Ignored Bazel outputs and symlinks
 tools/signing/              Device-signing entitlements generation
 BUILD.bazel                  App, Swift module, and resources
@@ -165,20 +165,58 @@ Only the local `file` protocol is enabled. Network protocols, the FFmpeg CLI, li
 
 ## Messenger
 
-### List UI prototype
+### Chat list
 
-Settings → List Demo opens the first consumer of `//submodules/ListUI`.
-The demo includes an app-owned profile header (avatar, bio and action buttons).
-A vertical drag starting anywhere first collapses the header and then scrolls
-the active list; pulling down reverses that order. Inertia continues across
-the boundary, and folder tabs pin beneath the top toolbar.
-The demo starts with one vertically scrolling list. The **Tags** button adds
-All / People / Groups tabs: drag horizontally from the center to change pages,
-or from a side edge to reveal row actions. Tap Tags again to remove the tabs
-and reveal actions from anywhere on a row. Each folder keeps its scroll
-position while paging. The plus and update buttons exercise insertion and
-content changes. Read, pin, mute and delete affect only in-memory demo data.
-Existing messenger screens still use their current lists and storage.
+The Chats tab uses `App/Messenger/ChatList/ChatListPage.swift`, backed by
+ListUI. The former table controller has been removed. The story header, UIKit
+row, swipe button and preview now live in separate files in the same directory:
+`StoriesHeader.swift`, `ChatCell.swift`, `SwipeButton.swift` and
+`ChatPeek.swift`.
+
+The controller embeds `ListPagerNode` and preserves the current story
+header, liquid folder selector and 76 pt UIKit row visuals. `ChatListItemNode`
+hosts the existing row; this is a list-engine migration, not a rewrite of its
+UIKit drawing. Real account snapshots and committed actions still come from
+`AccountSession`; tapping a row opens the existing `ChatViewController`.
+
+Without custom folders there is one All list with the original swipe actions.
+Creating a custom folder enables the existing built-in filters plus the custom
+folder pages, reveals the liquid folder strip and enables full-width paging.
+Row swipe gestures are disabled in folder mode. Holding a row opens the same
+preview with all five actions: Read/Unread, Pin/Unpin, Mute/Unmute, Delete and
+Archive. Story pull thresholds and the original spring-driven avatars
+are retained, and each folder has its own scroll position. The dialog screen,
+profile navigation, bottom tabs and database schema are unchanged.
+
+### Temporary chat folders
+
+Settings → Chat Folders opens folder management. Create Folder and the
+Add Folder menu shown by holding the bottom Chats tab share the same name
+prompt. Blank or whitespace-only names cannot be submitted. Folder names are
+trimmed, assigned stable UUIDs, and appear immediately in the horizontally
+scrollable folder strip above the current chat table. New folders are empty;
+chat assignment is deferred. Existing All / Personal / Channels / Bots filters
+continue to work.
+
+`App/Messenger/Folders/FolderSessionStore.swift` keeps names only in process
+memory, separately for each account and shared across scenes. Account switching
+and backgrounding preserve them; terminating and relaunching Contact resets
+custom folders. They are not written to UserDefaults, ContactStorage or SQLite.
+The Chats tab exposes Add Folder as an accessibility action as well.
+
+### Profile and shared list UI
+
+The profile opened from a chat avatar uses `//submodules/ListUI` for a single
+vertical scroll across its photo, information header and selected attachment
+pane. The existing liquid Media / Files / Links / Voice selector pins beneath
+the navigation bar and follows horizontal paging. Each page retains its scroll
+position. The media grid preserves pinch-driven column changes and the profile
+photo still expands into a gallery. Files, links and voice rows currently use
+local demonstration data.
+
+`App/Messenger/Profile` contains the profile controller, the media pane adapter,
+the pinchable grid and attachment items. The earlier profile controller and the
+Settings list demo have been removed after integration into the messenger.
 
 [`submodules/ListUI/README.md`](submodules/ListUI/README.md) describes the public
 interfaces, gesture policy, virtualization and initial implementation limits.
@@ -202,9 +240,9 @@ when Reduce Motion is enabled.
 
 Contact opens the MiniTelegram interface directly: chats, contacts, calls, settings, profiles, stories, media previews, composer, reactions, and themes. The sources were copied from the current working tree of `demo/controller/controller/MiniTelegram` and its shared `MetalVFXEngine`, including the fluid-reaction implementation. Contact builds independently of that checkout.
 
-`App/Messenger/Models` contains shared chat/account models; `App/Messenger/Fixtures/MTData.swift` supplies the prototype's local accounts, people, chats, and stories. Chats and message history are read from ContactStorage. Fixture conversations are inserted once per account in one transaction with a durable seed marker; later launches never recreate deleted fixture data. Sending, editing, reactions, channel stars, forwards, pin/mute/read/archive actions, deletions and channel reading anchors are saved. Random incoming-message timers and fabricated delivery acknowledgements are disabled; new outgoing messages remain in the durable outbox until a future sync engine confirms them. Calls and recording remain UI demonstrations. There is no backend or authentication yet. The sample passcode is `1234` and is a UI demonstration. Media previews are generated locally by `DemoPhotos`.
+`App/Messenger/Models` contains shared chat/account models; `App/Messenger/Fixtures/MessengerData.swift` supplies the prototype's local accounts, people, chats, and stories. Chats and message history are read from ContactStorage. Fixture conversations are inserted once per account in one transaction with a durable seed marker; later launches never recreate deleted fixture data. Sending, editing, reactions, channel stars, forwards, pin/mute/read/archive actions, deletions and channel reading anchors are saved. Random incoming-message timers and fabricated delivery acknowledgements are disabled; new outgoing messages remain in the durable outbox until a future sync engine confirms them. Calls and recording remain UI demonstrations. There is no backend or authentication yet. The sample passcode is `1234` and is a UI demonstration. Media previews are generated locally by `DemoPhotos`.
 
-The chat list includes four channel examples: VFX Daily, Motion Lab, Metal Notes, and UI Kitchen. `Fixtures/MTChannelData.swift` supplies their posts. Pull up past the last post to reveal the next channel's avatar and progress ring; release after the haptic threshold to switch. Channels follow the current account's list order and wrap around, excluding groups. Switching replaces the current feed so Back returns directly to the chat list. Each account keeps channel posts, reactions and reading positions in its encrypted database. VoiceOver exposes a Next Channel action on the Back button, and Reduce Motion uses a cross-fade.
+The chat list includes four channel examples: VFX Daily, Motion Lab, Metal Notes, and UI Kitchen. `Fixtures/ChannelData.swift` supplies their posts. Pull up past the last post to reveal the next channel's avatar and progress ring; release after the haptic threshold to switch. Channels follow the current account's list order and wrap around, excluding groups. Switching replaces the current feed so Back returns directly to the chat list. Each account keeps channel posts, reactions and reading positions in its encrypted database. VoiceOver exposes a Next Channel action on the Back button, and Reduce Motion uses a cross-fade.
 
 Channels use the original Telegram Post components: reactions and view counts inside each card, liquid comment sheets, stars that fill and accelerate when held, a long-press reaction picker with an expanding accordion and dust deletion, and forwarding by dragging a post to a contact. Channel reactions retain their original liquid flights and heart effect. Ordinary chats keep their separate emoji-flight reactions and the dedicated 💨 effect; swiping a message to reply now uses the original stretching liquid drop and arrow. Comments, stars, and forwarding remain local UI demonstrations.
 
@@ -237,4 +275,4 @@ All six Telegram MozjpegBinding entry points remain available, including JPEG XL
 
 ## Storage
 
-Contact includes `//libraries/grdb` (GRDB 7.11.1) backed by `//submodules/sqlcipher` (SQLCipher 4.19.0 Community / SQLite 3.53.4), using CommonCrypto. The [storage integration notes](submodules/ContactStorage/README.md) describe the database and UI integration. GRDB's privacy manifest and both libraries' licenses are bundled with the app. [ContactStorage](submodules/ContactStorage/README.md) opens a separate encrypted database and Keychain key per account, with versioned migrations, atomic message/outbox operations and observable queries. The chat list and conversation screens now use committed database snapshots through MTAccountSession, preserving their existing interaction animations.
+Contact includes `//libraries/grdb` (GRDB 7.11.1) backed by `//submodules/sqlcipher` (SQLCipher 4.19.0 Community / SQLite 3.53.4), using CommonCrypto. The [storage integration notes](submodules/ContactStorage/README.md) describe the database and UI integration. GRDB's privacy manifest and both libraries' licenses are bundled with the app. [ContactStorage](submodules/ContactStorage/README.md) opens a separate encrypted database and Keychain key per account, with versioned migrations, atomic message/outbox operations and observable queries. The chat list and conversation screens now use committed database snapshots through AccountSession, preserving their existing interaction animations.

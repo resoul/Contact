@@ -18,6 +18,8 @@ open class RevealableItemNode: ListItemNode, UIGestureRecognizerDelegate {
     private let feedback = UISelectionFeedbackGenerator()
 
     var hasActions: Bool { !leadingActions.isEmpty || !trailingActions.isEmpty }
+    public override var blocksHorizontalPaging: Bool { isRevealOpen }
+    public override func closeInteractions(animated: Bool) { closeReveal(animated: animated) }
     var revealRecognizer: UIPanGestureRecognizer { _ = view; return recognizer }
 
     open override func didLoad() {

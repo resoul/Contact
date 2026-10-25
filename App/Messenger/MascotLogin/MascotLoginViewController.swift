@@ -96,7 +96,7 @@ final class MascotLoginViewController: UIViewController, UITextFieldDelegate, UI
     private func configureHeader() {
         header.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(header)
-        let back = MTViews.iconButton("chevron.backward", size: 18)
+        let back = Views.iconButton("chevron.backward", size: 18)
         back.accessibilityLabel = "Back to Settings"
         back.accessibilityIdentifier = "contact.mascotBack"
         back.translatesAutoresizingMaskIntoConstraints = false
@@ -105,7 +105,7 @@ final class MascotLoginViewController: UIViewController, UITextFieldDelegate, UI
             self?.navigationController?.popViewController(animated: true)
         }, for: .touchUpInside)
         header.addSubview(back)
-        let heading = MTViews.label("Sign In", size: 17, weight: .semibold)
+        let heading = Views.label("Sign In", size: 17, weight: .semibold)
         heading.accessibilityTraits = .header
         heading.translatesAutoresizingMaskIntoConstraints = false
         header.addSubview(heading)

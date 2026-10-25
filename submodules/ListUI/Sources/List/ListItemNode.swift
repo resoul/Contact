@@ -7,6 +7,11 @@ open class ListItemNode: ASDisplayNode {
     var appliedVersion: Int?
     var appliedWidth: CGFloat = 0
     var reuseIdentifier = ""
+    /// Hooks for an existing UIKit row hosted inside a node.
+    open var interactionPanGestures: [UIGestureRecognizer] { [] }
+    open var selectionFailureGestures: [UIGestureRecognizer] { interactionPanGestures }
+    open var blocksHorizontalPaging: Bool { false }
+    open func closeInteractions(animated: Bool) {}
 
     public override init() {
         super.init()

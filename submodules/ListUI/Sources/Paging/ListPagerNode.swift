@@ -3,6 +3,11 @@ import AsyncDisplayKit
 
 public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
     public var selectedPageChanged: ((String) -> Void)?
+    public var pageTransitionUpdated: ((CGFloat) -> Void)?
+    public var usesFullWidthPaging = false
+    public var showsBuiltInTabs = true {
+        didSet { tabs.isHidden = !showsBuiltInTabs || pages.count <= 1; setNeedsLayout() }
+    }
     public private(set) var selectedPageID: String?
     private var pages: [ListPage] = []
     private var panes: [String: any ScrollablePane] = [:]
@@ -15,7 +20,9 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
     private var settling = false
     private var transitionGeneration = 0
     private var selectedIndex: Int { pages.firstIndex(where: { $0.id == selectedPageID }) ?? 0 }
-    private var tabsHeight: CGFloat { pages.count > 1 ? 48 : 0 }
+    private var customTabs: ASDisplayNode?
+    private var customTabsHeight: CGFloat = 0
+    private var tabsHeight: CGFloat { customTabs != nil ? customTabsHeight : (showsBuiltInTabs && pages.count > 1 ? 48 : 0) }
     public var currentPane: (any ScrollablePane)? { selectedPageID.flatMap { panes[$0] } }
     public var currentList: ListView? { (currentPane as? ListPane)?.list }
     var compositionPaneChanged: (((any ScrollablePane)?) -> Void)?
@@ -63,7 +70,7 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         }
         savedOffsets = savedOffsets.filter { ids.contains($0.key) }
         tabs.apply(pages: pages, theme: theme)
-        tabs.isHidden = pages.count <= 1
+        tabs.isHidden = !showsBuiltInTabs || pages.count <= 1
         ensureLists(near: selectedIndex)
         for page in pages {
             if let pane = panes[page.id] {
@@ -85,7 +92,18 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
     public override func layout() {
         super.layout()
         tabs.frame = CGRect(x: 0, y: 0, width: bounds.width, height: tabsHeight)
+        customTabs?.frame = CGRect(x: 0, y: 0, width: bounds.width, height: tabsHeight)
         placePages()
+    }
+
+    /// A caller-owned selector shares the same pinned area as the built-in tabs.
+    public func setTabsNode(_ node: ASDisplayNode, height: CGFloat) {
+        customTabs?.removeFromSupernode()
+        customTabs = node
+        customTabsHeight = max(0, height)
+        showsBuiltInTabs = false
+        addSubnode(node)
+        setNeedsLayout()
     }
 
     private func ensureLists(near index: Int) {
@@ -122,6 +140,7 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         }
 
         view.bringSubviewToFront(tabs.view)
+        if let customTabs { view.bringSubviewToFront(customTabs.view) }
     }
 
     private func pruneLists() {
@@ -134,12 +153,27 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         }
     }
 
+    /// Expanded profile content requires every pane, including evicted pages, to start at the top.
+    func resetScrollPositions() {
+        savedOffsets.removeAll()
+        for pane in panes.values where pane.verticalOffset != 0 {
+            pane.stopScrolling()
+            pane.setVerticalOffset(0)
+        }
+    }
+
     private func placePages() {
         for (index, page) in pages.enumerated() {
             panes[page.id]?.node.frame = CGRect(x: (CGFloat(index) - pagePosition) * bounds.width, y: tabsHeight,
                                           width: bounds.width, height: max(0, bounds.height - tabsHeight))
         }
         tabs.setPosition(pagePosition)
+        pageTransitionUpdated?(pagePosition)
+    }
+
+    public func selectPage(id: String, animated: Bool = true) {
+        guard let index = pages.firstIndex(where: { $0.id == id }) else { return }
+        select(index: index, animated: animated)
     }
 
     private func select(index: Int, animated: Bool) {
@@ -174,6 +208,7 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         if currentPane?.blocksHorizontalPaging == true {
             return false
         }
+        if usesFullWidthPaging { return true }
         
         return ListGesturePolicy.owner(hasPages: true, startX: point.x, width: bounds.width,
                                        rowHasActions: row?.hasActions ?? false, rowIsOpen: row?.isRevealOpen ?? false) == .paging

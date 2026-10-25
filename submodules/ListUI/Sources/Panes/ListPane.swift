@@ -4,9 +4,9 @@ import AsyncDisplayKit
 public final class ListPane: ScrollablePane {
     public let list: ListView
     public var node: ASDisplayNode { list }
-    public var verticalOffset: CGFloat { list.contentOffset }
+    public var verticalOffset: CGFloat { list.contentOffset + list.contentInsets.top }
     public var maximumVerticalOffset: CGFloat {
-        max(0, list.scrollView.contentSize.height - list.scrollView.bounds.height)
+        max(0, list.scrollView.contentSize.height + list.contentInsets.top + list.contentInsets.bottom - list.scrollView.bounds.height)
     }
     public var blocksHorizontalPaging: Bool { list.hasOpenReveal }
     public var geometryChanged: (() -> Void)?
@@ -17,7 +17,7 @@ public final class ListPane: ScrollablePane {
     }
 
     public func setVerticalOffset(_ offset: CGFloat) {
-        list.scrollView.setContentOffset(CGPoint(x: 0, y: offset), animated: false)
+        list.setDrivenContentOffset(offset - list.contentInsets.top)
     }
 
     public func setExternalScrollDriver(_ driver: ((CGFloat) -> Void)?) {
