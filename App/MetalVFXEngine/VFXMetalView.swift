@@ -174,6 +174,7 @@ class VFXMetalView: UIView {
     var clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
 
     private var displayLink: CADisplayLink?
+    private var applicationActive = true
     private var lastTimestamp: CFTimeInterval?
 
     override init(frame: CGRect) {
@@ -194,6 +195,10 @@ class VFXMetalView: UIView {
         metalLayer.framebufferOnly = true
         metalLayer.isOpaque = false
         metalLayer.maximumDrawableCount = 3
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationChanged(_:)),
+                                               name: UIApplication.willResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationChanged(_:)),
+                                               name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
     override func didMoveToWindow() {
@@ -252,7 +257,8 @@ class VFXMetalView: UIView {
     // MARK: Display link
 
     private func updateDisplayLink() {
-        let shouldRun = window != nil && !isPaused && gpu != nil
+        let shouldRun = window != nil && !isPaused && gpu != nil && applicationActive
+            && UIApplication.shared.applicationState == .active
         if shouldRun, displayLink == nil {
             let link = CADisplayLink(target: VFXDisplayLinkTarget(view: self),
                                      selector: #selector(VFXDisplayLinkTarget.tick(_:)))
@@ -269,6 +275,11 @@ class VFXMetalView: UIView {
     private func applyFrameRate() {
         let fps = preferredFramesPerSecond
         displayLink?.preferredFrameRateRange = CAFrameRateRange(minimum: min(60, fps), maximum: fps, preferred: fps)
+    }
+
+    @objc private func applicationChanged(_ notification: Notification) {
+        applicationActive = notification.name == UIApplication.didBecomeActiveNotification
+        updateDisplayLink()
     }
 
     fileprivate func step(_ link: CADisplayLink) {

@@ -42,6 +42,8 @@ struct Message: Codable {
     var edited = false
     var reactions: [String] = []
     var channelPost: ChannelPost?
+    var sendEffect: String?
+    var usesPhotoStack: Bool?
 
     init(kind: Kind, outgoing: Bool, time: String, read: Bool = true, pinned: Int? = nil, reply: Quote? = nil) {
         id = Int.random(in: 1...Int.max)
@@ -457,10 +459,20 @@ final class PhotosBubble: UIView, BubbleContent {
     var onTap: ((Int, UIImageView) -> Void)?
     private(set) var images: [UIImageView] = []
     private let meta: UIView
+    private var stack: PhotoStackView?
 
-    init(scenes: [DemoPhotos.Scene], outgoing: Bool, time: String, read: Bool) {
+    init(scenes: [DemoPhotos.Scene], outgoing: Bool, time: String, read: Bool, stacked: Bool = false) {
         (meta, _) = Self.makeMeta(time: time, outgoing: outgoing, read: read, onMedia: true)
         super.init(frame: .zero)
+        if stacked, scenes.count == 3 {
+            let stack = PhotoStackView(scenes: scenes)
+            self.stack = stack
+            images = stack.cards
+            stack.onOpen = { [weak self] index, image in self?.onTap?(index, image) }
+            addSubview(stack)
+            addSubview(meta)
+            return
+        }
         backgroundColor = outgoing ? Palette.outgoing : Palette.incoming
         layer.cornerRadius = 17
         layer.cornerCurve = .continuous
@@ -488,12 +500,18 @@ final class PhotosBubble: UIView, BubbleContent {
     }
 
     func fittingSize(maxWidth: CGFloat) -> CGSize {
+        if stack != nil { return CGSize(width: min(maxWidth, 300), height: 132) }
         let width = min(maxWidth, 260)
         return CGSize(width: width, height: images.count == 1 ? width * 1.1 : (images.count == 2 ? width / 2 : width))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        if let stack {
+            stack.frame = bounds.insetBy(dx: 4, dy: 12)
+            meta.frame.origin = CGPoint(x: bounds.width - 8 - meta.bounds.width, y: bounds.height - 16)
+            return
+        }
         let gap: CGFloat = 2
         let width = bounds.width, height = bounds.height
         switch images.count {
@@ -557,7 +575,8 @@ enum Bubbles {
         case .voice(let duration):
             return VoiceBubble(duration: duration, outgoing: message.outgoing, time: message.time, read: message.read)
         case .photos(let scenes):
-            return PhotosBubble(scenes: scenes, outgoing: message.outgoing, time: message.time, read: message.read)
+            return PhotosBubble(scenes: scenes, outgoing: message.outgoing, time: message.time, read: message.read,
+                                stacked: message.usesPhotoStack == true)
         case .round(let scene):
             return RoundBubble(scene: scene, outgoing: message.outgoing, time: message.time, read: message.read)
         case .sticker(let sticker):

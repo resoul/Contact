@@ -236,6 +236,39 @@ package, pinned by SHA-256 in `MODULE.bazel`, and linked via `//libraries/rive`.
 Aurora animation pauses offscreen and in the background, and becomes static
 when Reduce Motion is enabled.
 
+### Metal effects
+
+Settings → Metal Effects opens five effects copied from the local `demo/demo/demo`
+project: one lava progress bar, fire, GPU gravity, 2D smoke and an interacting fish
+swarm. The screen shows one effect at a time with touch interaction and its own
+controls. It contains no engine comparisons, profiler metrics or replicated views.
+
+`App/Messenger/MetalEffects` contains the screen; reusable views and simulation
+code live in `App/MetalVFXEngine/Simulations`, with shaders in the existing
+`Shaders` directory. Gravity runs only on the GPU. Animation stops when leaving
+the screen or when the app becomes inactive, and switching effects releases the
+previous view and its simulation resources after in-flight GPU work completes.
+
+### VFX previews and integrations
+
+Settings → VFX opens the visual prototypes from `demo/controller/controller`:
+Matrix + Kinetic registration, Photo Feed, Voice Room, Bubble Cluster, Particle
+Morph (Pay / AI / VIP / Load), the full Particle Charts gallery, photo-viewer and
+post effects, Vanish Mode, and Liquid Toast / Quick Reply. Chat Playground is a
+local-only conversation for the three-photo stack, Send effects, wallpaper and
+notification interactions.
+
+Holding Send chooses a message effect. Fluid Mesh is available in Chat Theme;
+group Call opens the Voice Room design and public demo channel Call opens the
+Bubble Cluster broadcast preview. Pulling up beyond the last chat message toggles
+Vanish Mode; messages composed in that mode are kept only in memory. Paper Burn
+can be previewed on individual messages/posts. Public channel examples expose
+translation and community context; the VFX Daily administrator example also
+exposes post analytics. Those data-dependent screens are explicitly sample data.
+
+[`App/Messenger/VFX/README.md`](App/Messenger/VFX/README.md) documents the entry
+points, fixture permissions, source provenance and message-storage behavior.
+
 ### Messenger interface
 
 Contact opens the MiniTelegram interface directly: chats, contacts, calls, settings, profiles, stories, media previews, composer, reactions, and themes. The sources were copied from the current working tree of `demo/controller/controller/MiniTelegram` and its shared `MetalVFXEngine`, including the fluid-reaction implementation. Contact builds independently of that checkout.

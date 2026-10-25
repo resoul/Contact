@@ -16,6 +16,7 @@ struct ChatTheme {
     let night: [UIColor]
     let outgoingDay: UIColor
     let outgoingNight: UIColor
+    var isMesh = false
 
     private static func rgb(_ hex: UInt32) -> UIColor {
         UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255,
@@ -41,6 +42,9 @@ struct ChatTheme {
         ChatTheme(emoji: "🎄", name: "Christmas Tree", day: [0xBFE3C0, 0x6FB57A, 0xD9F0C9, 0x8CC98A].map(rgb),
                     night: [0x0B1F12, 0x12301C, 0x07160C, 0x1A3F25].map(rgb),
                     outgoingDay: rgb(0xD9F7CF), outgoingNight: rgb(0x2E8A4B)),
+        ChatTheme(emoji: "🌈", name: "Fluid Mesh", day: [0xF95C8C, 0x7352FA, 0x26C7F2, 0xFFB84C].map(rgb),
+                  night: [0x5D244A, 0x35286E, 0x144856, 0x674322].map(rgb),
+                  outgoingDay: rgb(0xE3D7FF), outgoingNight: rgb(0x6543B8), isMesh: true),
     ]
 
     /// The theme the chat uses now; bubble colors read it when they resolve.

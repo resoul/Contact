@@ -12,8 +12,9 @@ final class ChannelPostCell: UITableViewCell {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    static func height(for post: ChannelPost, channel: ChannelPerson, width: CGFloat) -> CGFloat {
+    static func height(for post: ChannelPost, channel: ChannelPerson, width: CGFloat, communityContext: Bool? = nil) -> CGFloat {
         let card = ChannelPostView(post: post, channel: channel)
+        if let expanded = communityContext { card.setCommunityContext(expanded: expanded) }
         var size = CGSize(width: width, height: 0)
         // Chips wrap using their laid-out width. Resolve that width before the final fitting pass.
         for _ in 0..<3 {

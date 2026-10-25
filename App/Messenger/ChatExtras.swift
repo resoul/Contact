@@ -13,7 +13,7 @@ import UIKit
 
 final class MessageMenu: UIView {
     enum Action {
-        case reply, copy, edit, forward, vanish, select, delete
+        case reply, copy, edit, forward, vanish, select, delete, burn, translate, context, analytics
     }
 
     var onReaction: ((String, CGPoint) -> Void)?

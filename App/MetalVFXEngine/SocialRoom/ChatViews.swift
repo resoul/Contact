@@ -362,7 +362,8 @@ final class VoiceMessageView: UIView {
 // MARK: - Photo stack
 
 final class PhotoStackView: UIView {
-    private var cards: [UIImageView] = []
+    private(set) var cards: [UIImageView] = []
+    var onOpen: ((Int, UIImageView) -> Void)?
     private var spread = false
 
     init(scenes: [DemoPhotos.Scene]) {
@@ -408,7 +409,13 @@ final class PhotoStackView: UIView {
         }
     }
 
-    @objc private func toggle() {
+    @objc private func toggle(_ gesture: UITapGestureRecognizer) {
+        if spread, let onOpen, let index = cards.indices.reversed().first(where: {
+            cards[$0].point(inside: gesture.location(in: cards[$0]), with: nil)
+        }) {
+            onOpen(index, cards[index])
+            return
+        }
         spread.toggle()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         UIView.animate(withDuration: 0.55, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.4) {

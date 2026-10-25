@@ -19,6 +19,8 @@ final class InputBar: UIView, UITextViewDelegate {
     }
 
     var onSend: ((String) -> Void)?
+    var onSendWithEffect: ((String, String) -> Void)?
+    var onEffectsRequested: (() -> Void)?
     var onSticker: ((String, UIImageView) -> Void)?
     var onAttach: (() -> Void)?
     var onModeToggle: ((Bool) -> Void)?
@@ -98,6 +100,11 @@ final class InputBar: UIView, UITextViewDelegate {
         textView.accessibilityLabel = "Message"
         actionTap.accessibilityIdentifier = "contact.send"
         actionTap.accessibilityLabel = "Voice message"
+        actionTap.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Send with effect") { [weak self] _ in
+            guard let self, self.hasText, !self.editing, !self.overLimit else { return false }
+            self.onEffectsRequested?()
+            return true
+        }]
         textView.font = .systemFont(ofSize: 16)
         textView.textColor = Palette.text
         textView.backgroundColor = .clear
@@ -359,8 +366,17 @@ final class InputBar: UIView, UITextViewDelegate {
     }
 
     @objc private func held(_ gesture: UILongPressGestureRecognizer) {
-        guard !hasText else { return }
+        if hasText {
+            if gesture.state == .began, !editing, !overLimit { onEffectsRequested?() }
+            return
+        }
         onHold?(gesture)
+    }
+
+    func sendWithEffect(_ effect: String) {
+        guard hasText, !editing, !overLimit else { return }
+        onSendWithEffect?(text, effect)
+        clearText()
     }
 
     func setRecording(_ recording: Bool) {

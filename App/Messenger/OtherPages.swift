@@ -186,7 +186,7 @@ final class SettingsPage: Page, UITableViewDataSource, UITableViewDelegate {
     }
 
     fileprivate enum Action {
-        case profile, saved, calls, devices, folders, notifications, privacy, passcode, theme, language, mascotLogin, about, add
+        case profile, saved, calls, devices, folders, notifications, privacy, passcode, theme, language, mascotLogin, metalEffects, vfx, about, add
         case account(Int)
     }
 
@@ -278,7 +278,9 @@ final class SettingsPage: Page, UITableViewDataSource, UITableViewDelegate {
                  detail: home.isDark ? "Night" : "Day", action: .theme),
              Row(title: "Language", symbol: "globe", color: UIColor(red: 0.6, green: 0.35, blue: 0.9, alpha: 1), detail: "English",
                  action: .language),
-             Row(title: "Mascot Login", symbol: "face.smiling.fill", color: Palette.orange, action: .mascotLogin)],
+             Row(title: "Mascot Login", symbol: "face.smiling.fill", color: Palette.orange, action: .mascotLogin),
+             Row(title: "Metal Effects", symbol: "flame.fill", color: Palette.orange, action: .metalEffects),
+             Row(title: "VFX", symbol: "sparkles", color: Palette.accent, action: .vfx)],
             [Row(title: "About Contact", symbol: "info.circle", color: Palette.accent, action: .about)],
         ]
         table.reloadData()
@@ -339,6 +341,7 @@ final class SettingsPage: Page, UITableViewDataSource, UITableViewDelegate {
         cell.contentView.addSubview(iconView)
         cell.separatorInset.left = 60
         if case .mascotLogin = row.action { cell.accessibilityIdentifier = "contact.mascotLogin" }
+        if case .metalEffects = row.action { cell.accessibilityIdentifier = "contact.metalEffects" }
         return cell
     }
 
@@ -355,6 +358,12 @@ final class SettingsPage: Page, UITableViewDataSource, UITableViewDelegate {
             home.setPasscode(!home.passcodeEnabled)
         case .mascotLogin:
             home.root?.push(MascotLoginViewController())
+        case .metalEffects:
+            home.root?.push(MetalEffectsViewController(onBack: { [weak home] in home?.root?.pop() }))
+        case .vfx:
+            let catalog = VFXCatalogController()
+            catalog.home = home
+            home.openVFX(catalog)
         case .theme:
             if let cell = tableView.cellForRow(at: indexPath) {
                 home.toggleTheme(from: cell)

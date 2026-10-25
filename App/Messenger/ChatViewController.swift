@@ -33,6 +33,13 @@ final class ChatViewController: UIViewController {
     private var sections: [(title: String, messages: [Message])]
 
     private let wallpaper = ChannelWallpaperView()
+    private let meshWallpaper = FluidMeshGradientView()
+    private let paperBurn = PaperBurnAnimator()
+    private var vanishMode = false
+    private var ephemeralIDs = Set<Int>()
+    private var expandedCommunityNotes = Set<Int>()
+    private var sendEffectsMenu: SendEffectsMenu?
+    private var isVFXPlayground: Bool { chat.id == VFXChatFixtures.playground.id }
     private let table = UITableView(frame: .zero, style: .plain)
     private let replySwipeEffect = ReplySwipeEffect()
     private let channelEffectsHost = UIView()
@@ -103,9 +110,10 @@ final class ChatViewController: UIViewController {
     init(chat: Chat, home: HomeViewController) {
         self.chat = chat
         self.home = home
-        storageSession = home.storageSession
+        storageSession = chat.id == VFXChatFixtures.playground.id ? nil : home.storageSession
         channelAccount = home.currentAccount
-        sections = home.storageSession?.sections(for: chat.id) ?? [("Today", [])]
+        sections = chat.id == VFXChatFixtures.playground.id ? VFXChatFixtures.messages()
+            : (home.storageSession?.sections(for: chat.id) ?? [("Today", [])])
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -126,6 +134,9 @@ final class ChatViewController: UIViewController {
         wallpaper.patternAlpha = 0.1
         wallpaper.setTheme(day: theme.day, night: theme.night, animated: false)
         view.addSubview(wallpaper)
+        view.addSubview(meshWallpaper)
+        meshWallpaper.isUserInteractionEnabled = false
+        updateMeshWallpaper()
         // Day ⇄ night by any means (the app's theme switch too): the wallpaper goes through dusk.
 
 
@@ -176,6 +187,13 @@ final class ChatViewController: UIViewController {
         if #available(iOS 17.0, *) { view.keyboardLayoutGuide.usesBottomSafeArea = false }
         else { input.includesBottomSafeArea = false }
         input.onSend = { [weak self] text in self?.sendText(text) }
+        input.onSendWithEffect = { [weak self] text, effect in self?.sendText(text, effect: effect) }
+        input.onEffectsRequested = { [weak self] in
+            guard let self else { return }
+            self.sendEffectsMenu?.removeFromSuperview()
+            self.sendEffectsMenu = SendEffectsMenu(in: self.view, origin: self.input.convert(self.input.actionCenter, to: self.view),
+                onPick: { [weak self] effect in self?.input.sendWithEffect(effect) })
+        }
         input.onAttach = { [weak self] in self?.openAttach() }
         input.onModeToggle = { [weak self] video in
             guard let self else { return }
@@ -215,12 +233,23 @@ final class ChatViewController: UIViewController {
         guard let storageSession else { return }
         let offset = table.contentOffset
         let bottom = distanceFromBottom < 80
+        let previousIDs = Set(sections.flatMap(\.messages).map(\.id))
+        let temporary = sections.flatMap(\.messages).filter { ephemeralIDs.contains($0.id) }
         sections = storageSession.sections(for: chat.id)
+        let incoming = sections.flatMap(\.messages).last { !$0.outgoing && !$0.isDivider && !previousIDs.contains($0.id) }
+        if !temporary.isEmpty {
+            if sections.isEmpty { sections = [("Today", [])] }
+            sections[sections.count - 1].messages.append(contentsOf: temporary)
+        }
         channelPostHeights.removeAll()
         table.reloadData()
         table.layoutIfNeeded()
         if bottom { scrollToBottom(animated: false) }
         else { table.contentOffset = offset }
+        if let incoming, let window = view.window, chat.kind != .channel {
+            LiquidIslandToast.show(in: window, title: chat.person.name, message: incoming.summary, symbol: "message.fill",
+                onReply: { [weak self] text in self?.sendText(text) })
+        }
     }
 
     private var nightSet = false
@@ -235,6 +264,7 @@ final class ChatViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        updateMeshWallpaper()
         if chat.kind == .channel {
             if !channelHintShown {
                 channelHintShown = true
@@ -255,6 +285,8 @@ final class ChatViewController: UIViewController {
         stopChannelPostEffects()
         replySwipeEffect.stop()
         stopReactionAnimations()
+        meshWallpaper.isPaused = true
+        sendEffectsMenu?.removeFromSuperview()
     }
 
     private func buildHeader() {
@@ -293,7 +325,7 @@ final class ChatViewController: UIViewController {
         header.addSubview(titleTap)
         callButton.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            self.home?.call(self.chat.person)
+            self.openAudioRoom()
         }, for: .touchUpInside)
         callButton.accessibilityLabel = "Call"
         callButton.accessibilityIdentifier = "contact.call"
@@ -306,7 +338,7 @@ final class ChatViewController: UIViewController {
         let actions: [(String, String, () -> Void)] = [
             ("phone.fill", "Call", { [weak self] in
                 guard let self else { return }
-                self.home?.call(self.chat.person)
+                self.openAudioRoom()
             }),
             ("magnifyingglass", "Search", { [weak self] in self?.startSearch() }),
             ("paintpalette.fill", "Theme", { [weak self] in self?.openThemes() }),
@@ -453,6 +485,7 @@ final class ChatViewController: UIViewController {
         super.viewDidLayoutSubviews()
         let width = view.bounds.width
         wallpaper.frame = view.bounds
+        meshWallpaper.frame = view.bounds
         replySwipeEffect.frame = view.bounds
         channelEffectsHost.frame = view.bounds
         channelReactionLiquid.frame = channelEffectsHost.bounds
@@ -610,7 +643,7 @@ final class ChatViewController: UIViewController {
         return formatter.string(from: Date())
     }
 
-    private func sendText(_ text: String) {
+    private func sendText(_ text: String, effect: String? = nil) {
         if let editingID {
             finishEditing(editingID, text: text)
             return
@@ -622,8 +655,9 @@ final class ChatViewController: UIViewController {
         var message = Message(kind: .text(text), outgoing: true, time: now, read: false)
         message.reply = quote
         message.link = link
+        message.sendEffect = effect
         append(message, flyFrom: start)
-        if let effect = MessageEffect.effect(for: text) { playEffect(effect, on: message.id, delay: 0.45) }
+        if effect == nil, let detected = MessageEffect.effect(for: text) { playEffect(detected, on: message.id, delay: 0.45) }
     }
 
     /// The sticker leaves the suggestions strip and flies to its place in the chat, straightening up.
@@ -674,6 +708,11 @@ final class ChatViewController: UIViewController {
 
     private func append(_ message: Message, flyFrom start: CGRect? = nil, fromTyping: Bool = false, animated: Bool = true) {
         if !applyingStoredChange {
+            if storageSession == nil || vanishMode {
+                ephemeralIDs.insert(message.id)
+                committed { append(message, flyFrom: start, fromTyping: fromTyping, animated: animated) }
+                return
+            }
             storageSession?.save(message, chatID: chat.id, origin: storageOrigin, onFailure: { [weak self] in
                 if let text = message.text { self?.input.setText(text, editing: false) }
             }) { [weak self] in
@@ -694,6 +733,7 @@ final class ChatViewController: UIViewController {
         }
         let section = sections.count - 1
         sections[section].messages.append(message)
+        if let effect = message.sendEffect { playEffect(effect, on: message.id, delay: 0.45) }
         let indexPath = IndexPath(row: sections[section].messages.count - 1, section: section)
         UIView.performWithoutAnimation {
             table.insertRows(at: [indexPath], with: .none)
@@ -785,6 +825,7 @@ final class ChatViewController: UIViewController {
     /// Adds `emoji` from a point in this view, or removes an existing reaction.
     private func toggleReaction(_ emoji: String, on id: Int, from point: CGPoint?) {
         if !applyingStoredChange {
+            if storageSession == nil || ephemeralIDs.contains(id) { committed { toggleReaction(emoji, on: id, from: point) }; return }
             storageSession?.mutateMessage(chatID: chat.id, messageID: id, origin: storageOrigin, change: { value in
                 if value.reactions.contains(emoji) { value.reactions.removeAll { $0 == emoji } }
                 else { value.reactions = [emoji] + value.reactions.filter { $0 != emoji }.prefix(2) }
@@ -1025,6 +1066,7 @@ final class ChatViewController: UIViewController {
         if message.text != nil { actions.append(("Copy", "doc.on.doc", .copy)) }
         if message.outgoing, message.text != nil { actions.append(("Edit", "pencil", .edit)) }
         actions += [("Forward", "arrowshape.turn.up.right", .forward),
+                    ("Paper Burn", "flame", .burn),
                     ("Disappear in 5s", "timer", .vanish), ("Select", "checkmark.circle", .select),
                     ("Delete", "trash", .delete)]
         let menu = MessageMenu(in: view, bubble: bubble, outgoing: message.outgoing, actions: actions)
@@ -1062,6 +1104,12 @@ final class ChatViewController: UIViewController {
             setSelecting(true)
         case .delete:
             delete([id])
+        case .burn:
+            if let bubble = cell(for: id)?.bubble {
+                paperBurn.burn(bubble) { [weak bubble] in bubble?.alpha = 1 }
+            }
+        case .translate, .context, .analytics:
+            showChannelDetail(action, message: message)
         }
     }
 
@@ -1085,6 +1133,7 @@ final class ChatViewController: UIViewController {
 
     private func finishEditing(_ id: Int, text: String) {
         if !applyingStoredChange {
+            if storageSession == nil || ephemeralIDs.contains(id) { committed { finishEditing(id, text: text) }; return }
             storageSession?.mutateMessage(chatID: chat.id, messageID: id, origin: storageOrigin, change: { value in
                 value.kind = .text(text); value.edited = true
             }) { [weak self] in
@@ -1140,6 +1189,7 @@ final class ChatViewController: UIViewController {
     /// A timed-out message melts upward into haze (dust with convection), then its row closes.
     private func evaporate(_ id: Int) {
         if !applyingStoredChange {
+            if storageSession == nil || ephemeralIDs.contains(id) { committed { evaporate(id) }; return }
             storageSession?.delete(chatID: chat.id, ids: [id], origin: storageOrigin) { [weak self] in
                 guard let self else { return }
                 self.committed { self.evaporate(id) }
@@ -1315,6 +1365,7 @@ final class ChatViewController: UIViewController {
         ChatTheme.current = index
         let theme = ChatTheme.all[index]
         wallpaper.setTheme(day: theme.day, night: theme.night, animated: true)
+        updateMeshWallpaper()
         for cell in table.visibleCells {
             cell.contentView.subviews.compactMap { $0 as? BubbleContent }.forEach {
                 $0.setNeedsLayout()
@@ -1351,7 +1402,9 @@ final class ChatViewController: UIViewController {
     /// Bubbles crumble one after another, then their rows close up.
     private func delete(_ ids: Set<Int>) {
         if !applyingStoredChange {
-            storageSession?.delete(chatID: chat.id, ids: ids, origin: storageOrigin) { [weak self] in
+            let persisted = ids.subtracting(ephemeralIDs)
+            if storageSession == nil || persisted.isEmpty { committed { delete(ids) }; return }
+            storageSession?.delete(chatID: chat.id, ids: persisted, origin: storageOrigin) { [weak self] in
                 guard let self else { return }
                 self.committed { self.delete(ids) }
             }
@@ -1400,6 +1453,7 @@ final class ChatViewController: UIViewController {
         guard chat.kind != .channel, !jumpingToPin else { return }
         let topY = table.contentOffset.y + table.contentInset.top
         let paths = pinnedPaths
+        guard !paths.isEmpty else { pinned.isHidden = true; return }
         var shown = paths.count - 1
         for (index, path) in paths.enumerated() where table.rectForRow(at: path).minY < topY {
             shown = index
@@ -1409,6 +1463,7 @@ final class ChatViewController: UIViewController {
 
     @objc private func pinnedTapped() {
         let index = pinned.current
+        guard pinnedPaths.indices.contains(index) else { return }
         let path = pinnedPaths[index]
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         jumpingToPin = true
@@ -1500,6 +1555,17 @@ extension ChatViewController: UITableViewDataSource, UITableViewDelegate {
         if chat.kind == .channel, message.channelPost != nil {
             let cell = tableView.dequeueReusableCell(withIdentifier: "channelPost", for: indexPath) as! ChannelPostCell
             cell.configure(message, channel: chat.person)
+            if hasCommunityContext(message.id) {
+                cell.postView?.setCommunityContext(expanded: expandedCommunityNotes.contains(message.id), onToggle: { [weak self] expanded in
+                    guard let self else { return }
+                    if expanded { self.expandedCommunityNotes.insert(message.id) }
+                    else { self.expandedCommunityNotes.remove(message.id) }
+                    self.channelPostHeights[message.id] = nil
+                    self.resizeChannelPosts()
+                })
+            } else {
+                cell.postView?.removeCommunityContext()
+            }
             if let post = cell.postView { bindChannelPost(post, messageID: message.id) }
             return cell
         }
@@ -1533,7 +1599,8 @@ extension ChatViewController: UITableViewDataSource, UITableViewDelegate {
         if let post = message.channelPost {
             let width = tableView.bounds.width
             if let cached = channelPostHeights[message.id], cached.width == width { return cached.height }
-            let height = ChannelPostCell.height(for: post, channel: chat.person, width: width)
+            let height = ChannelPostCell.height(for: post, channel: chat.person, width: width,
+                communityContext: hasCommunityContext(message.id) ? expandedCommunityNotes.contains(message.id) : nil)
             channelPostHeights[message.id] = (width, height)
             return height
         }
@@ -1594,6 +1661,14 @@ extension ChatViewController: UITableViewDataSource, UITableViewDelegate {
 
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
                                    targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        if chat.kind != .channel {
+            let bottom = max(-table.contentInset.top, table.contentSize.height - table.bounds.height + table.contentInset.bottom)
+            if table.contentOffset.y - bottom > 72 {
+                toggleVanishMode()
+                targetContentOffset.pointee.y = bottom
+            }
+            return
+        }
         guard nextChannelIndicator.armed, !channelTransitioning, let next = nextChannel else { return }
         targetContentOffset.pointee.y = max(-table.contentInset.top,
             table.contentSize.height - table.bounds.height + table.contentInset.bottom)
@@ -1681,6 +1756,20 @@ private extension ChatViewController {
                        "😭", "🤝", "💯", "⚡", "🎉", "🙈", "😇", "🤗",
                        "👀", "💔", "🤡", "🏆", "🍾", "🌚", "🥱", "🤓",
                        "✍️", "💅", "🫡", "🦄", "🐳", "🍓", "🌭", "👻"])
+            if self.isPublicDemoChannel {
+                var actions: [(String, () -> Void)] = [
+                    ("Перевести пост", { [weak self] in self?.openChannelAction(.translate, id: messageID) }),
+                    ("Заметки сообщества", { [weak self] in self?.openChannelAction(.context, id: messageID) }),
+                    ("Paper Burn", { [weak self, weak post] in
+                        guard let self, let post else { return }
+                        self.paperBurn.burn(post.bubble) { [weak post] in post?.bubble.alpha = 1 }
+                    }),
+                ]
+                if self.canViewDemoAnalytics {
+                    actions.append(("Аналитика поста", { [weak self] in self?.openChannelAction(.analytics, id: messageID) }))
+                }
+                picker.addPostActions(actions)
+            }
             picker.onChoice = { [weak self] choice in
                 guard let self else { return }
                 self.channelPicker = nil
@@ -1809,7 +1898,11 @@ private extension ChatViewController {
         guard chat.kind == .channel else { return }
         input.isHidden = true
         pinned.isHidden = true
-        callButton.isHidden = true
+        callButton.isHidden = !isPublicDemoChannel
+        if isPublicDemoChannel {
+            callButton.setImage(UIImage(systemName: "waveform.circle"), for: .normal)
+            callButton.accessibilityLabel = "Live broadcast preview"
+        }
         backButton.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Next channel") { [weak self] _ in
             guard let self, !self.channelTransitioning, let next = self.nextChannel else { return false }
             self.beginChannelTransition(to: next)
@@ -2312,6 +2405,98 @@ final class VoiceRecorder: UIView {
         mic.transform = CGAffineTransform(scaleX: iconScale, y: iconScale)
         if finished, scale.value < 0.02 {
             canvas.settle()
+        }
+    }
+}
+
+// MARK: - VFX integration
+
+private extension ChatViewController {
+    // Explicit fixture permissions; no production role is inferred from a channel name.
+    var isPublicDemoChannel: Bool { chat.kind == .channel && [3, 9, 16].contains(chat.id) }
+    var canViewDemoAnalytics: Bool { isPublicDemoChannel && chat.id == 3 && channelAccount == 0 }
+
+    func hasCommunityContext(_ id: Int) -> Bool {
+        isPublicDemoChannel && sections.flatMap(\.messages).first(where: { $0.channelPost != nil })?.id == id
+    }
+
+    func updateMeshWallpaper() {
+        let theme = ChatTheme.all[ChatTheme.current]
+        let visible = theme.isMesh || vanishMode
+        meshWallpaper.isHidden = !visible
+        meshWallpaper.isPaused = !visible
+        meshWallpaper.colors = vanishMode
+            ? [UIColor(red: 0.08, green: 0.03, blue: 0.16, alpha: 1), .black,
+               UIColor(red: 0.18, green: 0.05, blue: 0.25, alpha: 1)]
+            : (traitCollection.userInterfaceStyle == .dark ? theme.night : theme.day)
+    }
+
+    func toggleVanishMode() {
+        guard chat.kind != .channel, let window = view.window else { return }
+        let origin = input.convert(input.actionCenter, to: window)
+        let enabling = !vanishMode
+        LiquidThemeReveal.transition(in: window, from: origin, duration: 0.9, apply: {
+            self.vanishMode = enabling
+            self.updateMeshWallpaper()
+            self.nameLabel.text = self.vanishMode ? "Исчезающий режим" : self.chat.person.name
+        })
+        Views.toast(enabling ? "New messages disappear when you leave this chat" : "Vanish mode off",
+                    symbol: "moon.stars.fill", in: view, top: pinned.frame.maxY + 8)
+    }
+
+    func openAudioRoom() {
+        if chat.kind == .group {
+            home?.openVFX(VoiceRoomDemoViewController())
+        } else if isPublicDemoChannel {
+            home?.openVFX(BubbleClusterDemoViewController())
+        } else if isVFXPlayground {
+            let menu = UIAlertController(title: "VFX Playground", message: nil, preferredStyle: .actionSheet)
+            menu.addAction(UIAlertAction(title: "Toggle Vanish Mode", style: .default) { [weak self] _ in self?.toggleVanishMode() })
+            menu.addAction(UIAlertAction(title: "Test Quick Reply", style: .default) { [weak self] _ in
+                guard let self, let window = self.view.window else { return }
+                LiquidIslandToast.show(in: window, title: "VFX Demo", message: "Try an inline reply", symbol: "message.fill",
+                    onReply: { [weak self] text in self?.sendText(text) })
+            })
+            menu.addAction(UIAlertAction(title: "Chat Wallpaper", style: .default) { [weak self] _ in self?.openThemes() })
+            menu.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            menu.popoverPresentationController?.sourceView = callButton
+            present(menu, animated: true)
+        } else {
+            home?.call(chat.person)
+        }
+    }
+
+    func openChannelAction(_ action: MessageMenu.Action, id: Int) {
+        guard isPublicDemoChannel, let path = indexPath(of: id) else { return }
+        showChannelDetail(action, message: message(at: path))
+    }
+
+    func showChannelDetail(_ action: MessageMenu.Action, message: Message) {
+        guard isPublicDemoChannel else { return }
+        if action == .analytics {
+            guard canViewDemoAnalytics else { return }
+            let screen = PostAnalyticsDemoViewController()
+            screen.navigationItem.prompt = "Демонстрационная аналитика · " + chat.person.name
+            home?.openVFX(screen)
+        } else {
+            let body = message.channelPost?.body ?? message.text ?? message.summary
+            let screen: UIViewController
+            if action == .context {
+                let notes = CommunityNotesDemoViewController()
+                notes.postText = body
+                notes.author = chat.person
+                notes.noteText = "Демонстрационная заметка к выбранному посту. Здесь появится дополнительный контекст и ссылки на источники. Это образец интерфейса, а не опубликованная проверка фактов."
+                notes.highlightedFacts = ["Демонстрационная заметка", "дополнительный контекст", "ссылки на источники"]
+                screen = notes
+            } else {
+                let translation = TranslateDemoViewController()
+                translation.original = body
+                translation.author = chat.person
+                translation.translation = "Демонстрационный перевод поста. Живой интерфейс помогает почувствовать движение: пружины, свет и плавные переходы."
+                screen = translation
+            }
+            screen.navigationItem.prompt = "Демонстрационные данные"
+            home?.openVFX(screen)
         }
     }
 }

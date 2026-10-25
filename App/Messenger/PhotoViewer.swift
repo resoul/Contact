@@ -128,7 +128,7 @@ final class PhotoViewer: UIView, UIScrollViewDelegate {
         target.alpha = 0
         source.alpha = 0
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.82, initialSpringVelocity: 0, animations: {
+        UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0.2, animations: {
             flyer.frame = target.frame
             flyer.layer.cornerRadius = 0
             self.dim.alpha = 1

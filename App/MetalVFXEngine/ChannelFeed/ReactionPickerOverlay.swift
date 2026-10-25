@@ -25,6 +25,35 @@ final class ReactionPickerOverlay: UIView {
     }
 
     var onChoice: ((Choice) -> Void)?
+    private var postActions: UIStackView?
+
+    func addPostActions(_ actions: [(String, () -> Void)]) {
+        postActions?.removeFromSuperview()
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.backgroundColor = ChannelPalette.bubble
+        stack.layer.cornerRadius = 14
+        stack.clipsToBounds = true
+        let height = CGFloat(actions.count) * 44
+        let below = collapsedFrame.maxY + 72
+        let y = below + height <= bounds.height - safeAreaInsets.bottom - 20
+            ? below : max(safeAreaInsets.top + 10, collapsedFrame.minY - height - 12)
+        stack.frame = CGRect(x: 20, y: y, width: bounds.width - 40, height: height)
+        for (title, action) in actions {
+            let button = UIButton(type: .system)
+            button.setTitle(title, for: .normal)
+            button.titleLabel?.font = .systemFont(ofSize: 16)
+            button.addAction(UIAction { [weak self] _ in
+                self?.close(with: .dismissed)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: action)
+            }, for: .touchUpInside)
+            stack.addArrangedSubview(button)
+        }
+        stack.distribution = .fillEqually
+        addSubview(stack)
+        postActions = stack
+        gestureRecognizers?.compactMap { $0 as? UITapGestureRecognizer }.forEach { $0.cancelsTouchesInView = false }
+    }
 
     /// The quick row, then the accordion's grid.
     private let emojis: [String]
@@ -243,6 +272,7 @@ final class ReactionPickerOverlay: UIView {
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
         let point = gesture.location(in: self)
+        if postActions?.frame.contains(point) == true { return }
         if let index = labels.indices.first(where: { scales[$0].value > 0.5 && labels[$0].frame.insetBy(dx: -6, dy: -6).contains(point) }) {
             pick(index)
         } else if moreButton.frame.insetBy(dx: -10, dy: -10).contains(point) {
@@ -261,6 +291,7 @@ final class ReactionPickerOverlay: UIView {
     }
 
     private func setExpanded(_ open: Bool) {
+        postActions?.isHidden = open
         guard !closing, open != expanded else { return }
         expanded = open
         moreButton.accessibilityLabel = open ? "Collapse reactions" : "More reactions"

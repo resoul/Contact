@@ -18,6 +18,25 @@ final class ChannelPostView: UIView, UIGestureRecognizerDelegate {
     let avatars: LiquidAvatarStack
     let forwardButton = UIView()
     private let content = UIStackView()
+    private var communityContext: CommunityContextNoteView?
+
+    func setCommunityContext(expanded: Bool, onToggle: ((Bool) -> Void)? = nil) {
+        if communityContext == nil {
+            let note = CommunityContextNoteView(expanded: expanded)
+            content.addArrangedSubview(note)
+            communityContext = note
+        }
+        communityContext?.setExpanded(expanded)
+        communityContext?.onToggle = onToggle
+    }
+
+    func removeCommunityContext() {
+        if let communityContext {
+            content.removeArrangedSubview(communityContext)
+            communityContext.removeFromSuperview()
+        }
+        communityContext = nil
+    }
     private let textLabel = UILabel()
     private let viewsLabel = RollingCounterLabel()
     private let commentsLabel = RollingCounterLabel()

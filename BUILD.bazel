@@ -1,6 +1,18 @@
 load("@rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_apple//apple:resources.bzl", "apple_metal_library")
 load("@rules_swift//swift:swift_library.bzl", "swift_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
+load("@rules_swift//swift:swift_interop_hint.bzl", "swift_interop_hint")
+
+swift_interop_hint(name = "particle_interop", module_name = "ParticleTypes")
+
+objc_library(
+    name = "ParticleTypes",
+    hdrs = ["App/MetalVFXEngine/Shaders/ParticleStructures.h"],
+    enable_modules = True,
+    module_name = "ParticleTypes",
+    aspect_hints = [":particle_interop"],
+)
 
 config_setting(
     name = "ios_device",
@@ -18,6 +30,7 @@ genrule(
 apple_metal_library(
     name = "MessengerShaders",
     srcs = glob(["App/MetalVFXEngine/Shaders/*.metal"]),
+    hdrs = glob(["App/MetalVFXEngine/Shaders/*.h"]),
     out = "default.metallib",
     visibility = ["//visibility:public"],
 )
@@ -32,6 +45,7 @@ swift_library(
         "//libraries/rive:RiveRuntime-LICENSE.txt",
     ],
     deps = [
+        ":ParticleTypes",
         "//libraries/rive",
         "//submodules/ContactStorage",
         "//submodules/AsyncDisplayKit",
