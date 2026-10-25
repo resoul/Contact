@@ -8,7 +8,7 @@ Source contains the `Texture/Core` files selected by `Texture.podspec`
 and file contents preserved. LICENSE is the upstream Apache 2.0 license.
 This is a local copy, not a Git submodule; changes are maintained in Contact.
 
-The Bazel target `//libraries/AsyncDisplayKit` exports the `AsyncDisplayKit`
+The Bazel target `//submodules/AsyncDisplayKit` exports the `AsyncDisplayKit`
 module. Its public headers follow the Core subspec. Flattened include paths
 are generated during the build to support upstream's
 `<AsyncDisplayKit/Header.h>` imports without duplicating maintained sources.

@@ -26,8 +26,15 @@ swift_library(
     name = "AppSources",
     srcs = glob(["App/**/*.swift"]),
     module_name = "Contact",
-    data = [":MessengerShaders"],
-    deps = ["//submodules/ContactStorage"],
+    data = [
+        ":MessengerShaders",
+        "App/Messenger/MascotLogin/login_mascot.riv",
+        "//libraries/rive:RiveRuntime-LICENSE.txt",
+    ],
+    deps = [
+        "//libraries/rive",
+        "//submodules/ContactStorage",
+    ],
 )
 
 ios_application(

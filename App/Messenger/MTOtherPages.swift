@@ -186,7 +186,7 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
     }
 
     fileprivate enum Action {
-        case profile, saved, calls, devices, folders, notifications, privacy, passcode, theme, language, about, add
+        case profile, saved, calls, devices, folders, notifications, privacy, passcode, theme, language, mascotLogin, about, add
         case account(Int)
     }
 
@@ -277,7 +277,8 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
              Row(title: "Appearance", symbol: "paintbrush.fill", color: MTPalette.accent,
                  detail: home.isDark ? "Night" : "Day", action: .theme),
              Row(title: "Language", symbol: "globe", color: UIColor(red: 0.6, green: 0.35, blue: 0.9, alpha: 1), detail: "English",
-                 action: .language)],
+                 action: .language),
+             Row(title: "Mascot Login", symbol: "face.smiling.fill", color: MTPalette.orange, action: .mascotLogin)],
             [Row(title: "About Contact", symbol: "info.circle", color: MTPalette.accent, action: .about)],
         ]
         table.reloadData()
@@ -337,6 +338,7 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
         iconView.frame = CGRect(x: 16, y: 8, width: 30, height: 30)
         cell.contentView.addSubview(iconView)
         cell.separatorInset.left = 60
+        if case .mascotLogin = row.action { cell.accessibilityIdentifier = "contact.mascotLogin" }
         return cell
     }
 
@@ -350,6 +352,8 @@ final class MTSettingsPage: MTPage, UITableViewDataSource, UITableViewDelegate {
         case .calls: home.tabBar.select(.calls); home.tabBar.onSelect?(.calls)
         case .passcode:
             home.setPasscode(!home.passcodeEnabled)
+        case .mascotLogin:
+            home.root?.push(MascotLoginViewController())
         case .theme:
             if let cell = tableView.cellForRow(at: indexPath) {
                 home.toggleTheme(from: cell)

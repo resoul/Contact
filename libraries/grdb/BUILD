@@ -7,7 +7,7 @@ apple_resource_bundle(
     resources = [
         "@grdb_sources//:GRDB/PrivacyInfo.xcprivacy",
         "@grdb_sources//:LICENSE",
-        "//libraries/sqlcipher:SQLCipher-LICENSE.txt",
+        "//submodules/sqlcipher:SQLCipher-LICENSE.txt",
     ],
 )
 
@@ -18,6 +18,6 @@ swift_library(
     defines = ["GRDBCIPHER", "SQLITE_HAS_CODEC", "SQLITE_ENABLE_FTS5"],
     copts = ["-swift-version", "6", "-enable-upcoming-feature", "MemberImportVisibility"],
     data = [":GRDBResources"],
-    deps = ["//libraries/sqlcipher"],
+    deps = ["//submodules/sqlcipher"],
     visibility = ["//visibility:public"],
 )

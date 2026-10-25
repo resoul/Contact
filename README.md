@@ -56,7 +56,7 @@ BAZEL_APPLE_PREFER_PERSISTENT_SIMS=1 bazelisk run //:Contact --config=simulator 
 
 ### Physical devices
 
-Set your `bundle_id` in `BUILD.bazel` and place the corresponding development provisioning profile at `signing/development.mobileprovision`. Install a signing certificate with its private key in Keychain:
+Set your `bundle_id` in `BUILD.bazel` and place the corresponding development provisioning profile at `signing/development.mobileprovision`. The build uses `tools/signing/device-entitlements.py` to derive device entitlements from that profile, including the app's Keychain access group and team identity. Install a signing certificate with its private key in Keychain:
 
 ```sh
 security find-identity -v -p codesigning
@@ -83,19 +83,23 @@ App/Messenger/               MiniTelegram screens, models, and local fixtures
 App/Application/             Account contexts and background storage ownership
 App/MetalVFXEngine/          Shared effects and Metal shader sources
 App/Support/                 iOS compatibility helpers
-libraries/                   Bazel rules, build scripts, and library git submodules
+App/Messenger/MascotLogin/   Rive login prototype opened from Settings
+libraries/                   External dependencies, Bazel rules, and build scripts
 libraries/grdb/              GRDB Swift module, pinned upstream archive
-libraries/sqlcipher/         Vendored SQLCipher engine and Swift-compatible headers
-libraries/AsyncDisplayKit/   Vendored Texture/Core sources and Bazel module
+submodules/sqlcipher/        Vendored SQLCipher engine and Swift-compatible headers
+submodules/AsyncDisplayKit/  Vendored Texture/Core sources and Bazel module
 submodules/FFMpegBinding/     Objective-C FFmpeg API for Swift
 submodules/WebPBinding/       Objective-C WebP API for Swift
 submodules/MozjpegBinding/    JPEG/JPEG XL APIs and stripped thumbnails
 submodules/ImageCompression/ Swift image compression helpers
 submodules/ContactStorage/   Account databases, Keychain, migrations and observed queries
 cache/                       Ignored Bazel outputs and symlinks
+tools/signing/              Device-signing entitlements generation
 BUILD.bazel                  App, Swift module, and resources
 MODULE.bazel                 Bazel dependencies and build tools
 ```
+
+The `submodules/` directory contains sources maintained directly in Contact, including vendored AsyncDisplayKit and SQLCipher. The directory name does not imply Git submodule registration. External upstream dependencies and their build rules live in `libraries/`.
 
 Git tracks app sources, bindings, `BUILD` and `.bzl` files, build scripts, `.gitmodules`, and `MODULE.bazel.lock`. Contact stores commit references for upstream libraries; their sources are fetched as git submodules. This README is the project documentation. Upstream documentation and license files stay with their submodules.
 
@@ -103,17 +107,17 @@ Git tracks app sources, bindings, `BUILD` and `.bzl` files, build scripts, `.git
 
 ### AsyncDisplayKit
 
-`//libraries/AsyncDisplayKit` builds the vendored Texture 3.2.0 Core sources
+`//submodules/AsyncDisplayKit` builds the vendored Texture 3.2.0 Core sources
 as the `AsyncDisplayKit` module. Add this target to a consumer's `deps` to use
 `import AsyncDisplayKit`. The app does not depend on it yet. Unlike the codec
 submodules, these sources are maintained directly in Contact; the original
 commit and scope are recorded in
-[`libraries/AsyncDisplayKit/UPSTREAM.md`](libraries/AsyncDisplayKit/UPSTREAM.md).
+[`submodules/AsyncDisplayKit/UPSTREAM.md`](submodules/AsyncDisplayKit/UPSTREAM.md).
 PINRemoteImage, IGListKit and Yoga are not dependencies, and Video, MapKit,
 Photos and AssetsLibrary integrations are disabled. Build the module with:
 
 ```sh
-bazelisk build //libraries/AsyncDisplayKit --config=simulator
+bazelisk build //submodules/AsyncDisplayKit --config=simulator
 ```
 
 ### Codecs
@@ -159,6 +163,23 @@ Only the local `file` protocol is enabled. Network protocols, the FFmpeg CLI, li
 
 ## Messenger
 
+### Mascot login prototype
+
+`App/Messenger/MascotLogin/MascotLoginViewController.swift` preserves the login screen
+from `demo/view/view/MascotLogin`, including its bundled `login_mascot.riv`.
+The submit button uses the Aurora border shader from the demo gallery.
+Submission only validates the local fields and triggers the mascot's success
+or failure animation; it does not authenticate an account.
+
+Open Settings → Mascot Login, directly below Language, to view the screen.
+Its Back button returns to Settings. Contact starts with the messenger.
+RiveRuntime 6.28.1 is fetched as the same XCFramework used by the demo's Swift
+package, pinned by SHA-256 in `MODULE.bazel`, and linked via `//libraries/rive`.
+Aurora animation pauses offscreen and in the background, and becomes static
+when Reduce Motion is enabled.
+
+### Messenger interface
+
 Contact opens the MiniTelegram interface directly: chats, contacts, calls, settings, profiles, stories, media previews, composer, reactions, and themes. The sources were copied from the current working tree of `demo/controller/controller/MiniTelegram` and its shared `MetalVFXEngine`, including the fluid-reaction implementation. Contact builds independently of that checkout.
 
 `App/Messenger/Models` contains shared chat/account models; `App/Messenger/Fixtures/MTData.swift` supplies the prototype's local accounts, people, chats, and stories. Chats and message history are read from ContactStorage. Fixture conversations are inserted once per account in one transaction with a durable seed marker; later launches never recreate deleted fixture data. Sending, editing, reactions, channel stars, forwards, pin/mute/read/archive actions, deletions and channel reading anchors are saved. Random incoming-message timers and fabricated delivery acknowledgements are disabled; new outgoing messages remain in the durable outbox until a future sync engine confirms them. Calls and recording remain UI demonstrations. There is no backend or authentication yet. The sample passcode is `1234` and is a UI demonstration. Media previews are generated locally by `DemoPhotos`.
@@ -194,8 +215,6 @@ Consumers add the relevant binding to their Bazel `deps`: `//submodules/FFMpegBi
 
 All six Telegram MozjpegBinding entry points remain available, including JPEG XL encoding/decoding. The compatibility JPEG function uses quality 72 and encodes in memory without touching `tempFilePath`. Mini-thumbnails retain Telegram's v1 format. JPEG flattens alpha onto white; JPEG XL preserves alpha, with lossless encoding at quality 100 after sRGB normalization. Images are limited to 32 million pixels; animated JPEG XL is rejected.
 
-## Storage benchmark
+## Storage
 
-Contact includes `//libraries/grdb` (GRDB 7.11.1) backed by `//libraries/sqlcipher` (SQLCipher 4.19.0 Community / SQLite 3.53.4), using CommonCrypto. The [storage integration notes](submodules/ContactStorage/README.md) describe the database and UI integration. GRDB's privacy manifest and both libraries' licenses are bundled with the app. [ContactStorage](submodules/ContactStorage/README.md) opens a separate encrypted database and Keychain key per account, with versioned migrations, atomic message/outbox operations and observable queries. The chat list and conversation screens now use committed database snapshots through MTAccountSession, preserving their existing interaction animations.
-
-[`tools/StorageBenchmark`](tools/StorageBenchmark/README.md) contains a separate Release runner comparing direct SQLCipher, GRDB cached queries and GRDB records on the same encrypted engine. It measures insertion, update, reads and deletion at 10,000–1,000,000 messages. The [iPhone 14 Pro Max report](tools/StorageBenchmark/Results/2026-10-25-iphone14-pro-max/report.html) includes p50/p95 and reproducible raw samples. The timing runner remains independent of Contact's production Bazel dependencies.
+Contact includes `//libraries/grdb` (GRDB 7.11.1) backed by `//submodules/sqlcipher` (SQLCipher 4.19.0 Community / SQLite 3.53.4), using CommonCrypto. The [storage integration notes](submodules/ContactStorage/README.md) describe the database and UI integration. GRDB's privacy manifest and both libraries' licenses are bundled with the app. [ContactStorage](submodules/ContactStorage/README.md) opens a separate encrypted database and Keychain key per account, with versioned migrations, atomic message/outbox operations and observable queries. The chat list and conversation screens now use committed database snapshots through MTAccountSession, preserving their existing interaction animations.

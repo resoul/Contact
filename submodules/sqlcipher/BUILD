@@ -17,7 +17,7 @@ objc_library(
     enable_modules = True,
     module_name = "SQLCipher",
     aspect_hints = [":swift_interop"],
-    # Keep the GRDB-compatible engine configuration used by StorageBenchmark.
+    # Keep the engine configuration compatible with GRDB.
     # GRDB needs decltype/progress/deprecated APIs omitted by Telegram's build.
     copts = [
         "-DSQLITE_HAS_CODEC=1",

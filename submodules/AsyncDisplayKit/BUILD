@@ -25,7 +25,7 @@ genrule(
     srcs = core_headers,
     outs = ["include/AsyncDisplayKit/" + h.split("/")[-1] for h in core_headers],
     cmd = "\n".join([
-        "printf '#import \"libraries/AsyncDisplayKit/" + h + "\"\n' > $(location include/AsyncDisplayKit/" + h.split("/")[-1] + ")"
+        "printf '#import \"submodules/AsyncDisplayKit/" + h + "\"\n' > $(location include/AsyncDisplayKit/" + h.split("/")[-1] + ")"
         for h in core_headers
     ]),
 )
