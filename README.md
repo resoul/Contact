@@ -93,6 +93,8 @@ submodules/WebPBinding/       Objective-C WebP API for Swift
 submodules/MozjpegBinding/    JPEG/JPEG XL APIs and stripped thumbnails
 submodules/ImageCompression/ Swift image compression helpers
 submodules/ContactStorage/   Account databases, Keychain, migrations and observed queries
+submodules/ListUI/           Node-based lists, folder paging, and row swipe actions
+App/Messenger/ListDemo/      In-memory consumer example opened from Settings
 cache/                       Ignored Bazel outputs and symlinks
 tools/signing/              Device-signing entitlements generation
 BUILD.bazel                  App, Swift module, and resources
@@ -162,6 +164,24 @@ The build exports static `avformat`, `avcodec`, `avutil`, and `swresample` libra
 Only the local `file` protocol is enabled. Network protocols, the FFmpeg CLI, libavfilter, libswscale, and libavdevice are disabled. GPL and nonfree components are disabled; upstream license texts remain in the submodules.
 
 ## Messenger
+
+### List UI prototype
+
+Settings → List Demo opens the first consumer of `//submodules/ListUI`.
+The demo includes an app-owned profile header (avatar, bio and action buttons).
+A vertical drag starting anywhere first collapses the header and then scrolls
+the active list; pulling down reverses that order. Inertia continues across
+the boundary, and folder tabs pin beneath the top toolbar.
+The demo starts with one vertically scrolling list. The **Tags** button adds
+All / People / Groups tabs: drag horizontally from the center to change pages,
+or from a side edge to reveal row actions. Tap Tags again to remove the tabs
+and reveal actions from anywhere on a row. Each folder keeps its scroll
+position while paging. The plus and update buttons exercise insertion and
+content changes. Read, pin, mute and delete affect only in-memory demo data.
+Existing messenger screens still use their current lists and storage.
+
+[`submodules/ListUI/README.md`](submodules/ListUI/README.md) describes the public
+interfaces, gesture policy, virtualization and initial implementation limits.
 
 ### Mascot login prototype
 
