@@ -86,6 +86,7 @@ App/Support/                 iOS compatibility helpers
 libraries/                   Bazel rules, build scripts, and library git submodules
 libraries/grdb/              GRDB Swift module, pinned upstream archive
 libraries/sqlcipher/         Vendored SQLCipher engine and Swift-compatible headers
+libraries/AsyncDisplayKit/   Vendored Texture/Core sources and Bazel module
 submodules/FFMpegBinding/     Objective-C FFmpeg API for Swift
 submodules/WebPBinding/       Objective-C WebP API for Swift
 submodules/MozjpegBinding/    JPEG/JPEG XL APIs and stripped thumbnails
@@ -99,6 +100,23 @@ MODULE.bazel                 Bazel dependencies and build tools
 Git tracks app sources, bindings, `BUILD` and `.bzl` files, build scripts, `.gitmodules`, and `MODULE.bazel.lock`. Contact stores commit references for upstream libraries; their sources are fetched as git submodules. This README is the project documentation. Upstream documentation and license files stay with their submodules.
 
 ## Libraries
+
+### AsyncDisplayKit
+
+`//libraries/AsyncDisplayKit` builds the vendored Texture 3.2.0 Core sources
+as the `AsyncDisplayKit` module. Add this target to a consumer's `deps` to use
+`import AsyncDisplayKit`. The app does not depend on it yet. Unlike the codec
+submodules, these sources are maintained directly in Contact; the original
+commit and scope are recorded in
+[`libraries/AsyncDisplayKit/UPSTREAM.md`](libraries/AsyncDisplayKit/UPSTREAM.md).
+PINRemoteImage, IGListKit and Yoga are not dependencies, and Video, MapKit,
+Photos and AssetsLibrary integrations are disabled. Build the module with:
+
+```sh
+bazelisk build //libraries/AsyncDisplayKit --config=simulator
+```
+
+### Codecs
 
 | Library | Pinned version / commit | Bazel dependency |
 | --- | --- | --- |
