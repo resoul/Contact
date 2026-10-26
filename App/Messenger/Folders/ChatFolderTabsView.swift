@@ -84,9 +84,8 @@ final class ChatFolderTabsView: UIControl {
         guard !titles.isEmpty else { return }
         let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
         let widest = titles.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
-        let slot = titles.count <= Folder.allCases.count
-            ? bounds.width / CGFloat(titles.count)
-            : max(bounds.width / CGFloat(titles.count), min(190, max(88, widest + 34)))
+        // Equal tabs across the width while they fit; past that the strip scrolls.
+        let slot = max(bounds.width / CGFloat(titles.count), min(190, max(88, widest + 34)))
         let width = slot * CGFloat(titles.count)
         scroll.contentSize = CGSize(width: width, height: bounds.height)
         selector?.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)

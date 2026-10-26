@@ -8,7 +8,8 @@ final class ChatListPage: Page {
     private weak var storageSession: AccountSession?
     private let storageOrigin = UUID()
     private var accountID = MessengerData.accounts[0].id
-    private var customFolders: [SessionFolder] = []
+    private var customFolders: [ChatFolder] = []
+    private var allChatsPosition = 0
     private var choices: [ChatListFolder] = []
     private var lists: [String: WeakList] = [:]
     private let pager = ListPagerNode(theme: ListTheme(background: Palette.background, rowBackground: Palette.background,
@@ -16,6 +17,12 @@ final class ChatListPage: Page {
     private let header = StoriesHeader()
     private let folders = ChatFolderTabsView()
     private var storiesExpanded = false
+    /// Story users (by index) whose stories were all watched; shared with the header.
+    private var seenStories = Set<Int>()
+    /// Index 0 is the user's own story in the header, so no chat gets its ring.
+    private static let storyUserByName: [String: Int] = Dictionary(
+        MessengerData.storyUsers.enumerated().dropFirst().map { ($0.element.person.name, $0.offset) },
+        uniquingKeysWith: { first, _ in first })
     private var updatingHeader = false
     private var applyingAnimated = false
     private var screenVisible = false
@@ -104,7 +111,8 @@ final class ChatListPage: Page {
         storageSession = nil
         accountID = MessengerData.accounts[account].id
         chats = []
-        customFolders = FolderSessionStore.shared.folders(for: accountID)
+        customFolders = []
+        allChatsPosition = 0
         storiesExpanded = false
         lists = [:]
         if isViewLoaded {
@@ -126,15 +134,17 @@ final class ChatListPage: Page {
 
     func updateLock() { header.setLock(home?.passcodeEnabled == true) }
 
-    func refreshSessionFolders() {
-        customFolders = FolderSessionStore.shared.folders(for: accountID)
+    func refreshFolders() {
+        customFolders = storageSession?.folders ?? []
+        allChatsPosition = storageSession?.allChatsPosition ?? 0
         guard isViewLoaded else { return }
         refresh(animated: false)
     }
 
-    func selectSessionFolder(_ id: UUID?) {
-        refreshSessionFolders()
-        let choice = id.flatMap { id in choices.first(where: { $0.customID == id }) } ?? choices.first
+    func selectFolder(_ id: UUID?) {
+        refreshFolders()
+        // nil is All Chats, which need not be the first tab.
+        let choice = choices.first(where: { $0.customID == id }) ?? choices.first
         if let choice { pager.selectPage(id: choice.id) }
     }
 
@@ -146,19 +156,24 @@ final class ChatListPage: Page {
 
     private func applyStoredChats(_ value: [Chat]) {
         chats = value
+        customFolders = storageSession?.folders ?? []
+        allChatsPosition = storageSession?.allChatsPosition ?? 0
         guard isViewLoaded else { return }
         refresh()
     }
 
     private func refresh(animated: Bool = true) {
-        choices = ChatListAdapter.folders(accountID: accountID, custom: customFolders)
+        choices = ChatListAdapter.folders(accountID: accountID, custom: customFolders, allChatsPosition: allChatsPosition)
         applyingAnimated = animated
         let pages = choices.map { choice -> ListPage in
             let items: [any ListItem]
-            if choice.customID != nil {
-                items = [ChatEmptyItem(id: "empty:\(choice.id)", name: choice.title)]
+            let folderChats = choice.chats(from: chats)
+            if let custom = choice.custom, folderChats.isEmpty {
+                let id = custom.id
+                items = [ChatEmptyItem(id: "empty:\(choice.id)", name: choice.title,
+                                       onEdit: { [weak self] in self?.home?.editFolder(id) })]
             } else {
-                items = choice.chats(from: chats).map { self.item($0) }
+                items = folderChats.map { self.item($0) }
             }
             return ListPage(id: choice.id, title: choice.title, makePane: { [weak self] theme in
                 let list = ListView(theme: theme)
@@ -179,7 +194,7 @@ final class ChatListPage: Page {
     }
 
     private func item(_ chat: Chat) -> ChatListItem {
-        ChatListItem(chat: chat, accountID: accountID, swipeEnabled: !hasFolders,
+        ChatListItem(chat: chat, story: story(for: chat), accountID: accountID, swipeEnabled: !hasFolders,
             onSelect: { [weak self] id in
                 guard let self, let chat = self.chats.first(where: { $0.id == id }) else { return }
                 if self.pager.currentList?.hasOpenReveal == true {
@@ -189,7 +204,22 @@ final class ChatListPage: Page {
                 self.home?.openChat(chat)
             }, onAction: { [weak self] id, action, node in self?.perform(action, id: id, node: node) },
             onPeek: { [weak self] id, node in self?.peek(id: id, node: node) },
-            onSwipe: { [weak self] node in self?.pager.currentList?.closeReveals(except: node) })
+            onSwipe: { [weak self] node in self?.pager.currentList?.closeReveals(except: node) },
+            onOpenStory: { [weak self] id, node in
+                guard let self, let chat = self.chats.first(where: { $0.id == id }),
+                      let index = self.story(for: chat)?.userIndex else { return }
+                if self.pager.currentList?.hasOpenReveal == true {
+                    self.pager.currentList?.closeReveals()
+                    return
+                }
+                self.openStory(index, from: node, chatID: id)
+            })
+    }
+
+    private func story(for chat: Chat) -> ChatStory? {
+        guard chat.kind == .person, let index = Self.storyUserByName[chat.person.name] else { return nil }
+        let total = MessengerData.storyUsers[index].photos.count
+        return ChatStory(userIndex: index, total: total, unseen: seenStories.contains(index) ? 0 : total)
     }
 
     private func configure(_ list: ListView, pageID: String) {
@@ -282,13 +312,27 @@ final class ChatListPage: Page {
         }
     }
 
-    private func openStory(_ index: Int) {
+    /// Opened from a chat row, the viewer grows from and returns to that row's avatar
+    /// while it shows the same person; other people return to the header.
+    private func openStory(_ index: Int, from node: ChatListItemNode? = nil, chatID: Int? = nil) {
         guard let host = home?.root?.view else { return }
-        let viewer = StoryViewer(in: host, users: MessengerData.storyUsers, start: index) { [weak self, weak host] user in
+        let viewer = StoryViewer(in: host, users: MessengerData.storyUsers, start: index) { [weak self, weak host, weak node] user in
             guard let self, let host else { return .zero }
+            if user == index, let node, node.cell.chatID == chatID, node.isInHierarchy {
+                return node.cell.avatarFrame(in: host)
+            }
             return self.header.avatarFrame(user, in: host)
         }
-        viewer.onSeen = { [weak self] user in self?.header.markSeen(user) }
+        var seenChanged = false
+        viewer.onSeen = { [weak self] user in
+            guard let self else { return }
+            self.header.markSeen(user)
+            if self.seenStories.insert(user).inserted, Self.storyUserByName.values.contains(user) { seenChanged = true }
+        }
+        // Rows turn grey once the viewer is gone, so the change is visible rather than hidden under it.
+        viewer.onClose = { [weak self] in
+            if seenChanged { self?.refresh() }
+        }
     }
 
     private func perform(_ action: ChatCell.Action, id: Int, node: ChatListItemNode?) {

@@ -7,6 +7,10 @@ public final class AvatarNode: ASDisplayNode, AvatarPlaybackParticipant {
     public var state: AvatarDisplayState { displayState }
     public var image: UIImage? { imageNode.image }
     public var avatarCornerRadius: CGFloat? { didSet { setNeedsLayout() } }
+    public private(set) var storyRing: AvatarStoryRing?
+    /// Clips the picture; the story ring sits outside it, so the node itself does not clip.
+    private let contentNode = ASDisplayNode()
+    private var storyRingNode: StoryRingNode?
     private let placeholder = AvatarPlaceholderNode()
     private let imageNode = ASImageNode()
     private var videoNode: AvatarVideoNode?
@@ -25,14 +29,16 @@ public final class AvatarNode: ASDisplayNode, AvatarPlaybackParticipant {
 
     public override init() {
         super.init()
-        addSubnode(placeholder)
-        addSubnode(imageNode)
+        contentNode.isUserInteractionEnabled = false
+        addSubnode(contentNode)
+        contentNode.addSubnode(placeholder)
+        contentNode.addSubnode(imageNode)
         imageNode.contentMode = .scaleAspectFill
         imageNode.isUserInteractionEnabled = false
         imageNode.clipsToBounds = true
         imageNode.isHidden = true
     }
-    public override func didLoad() { super.didLoad(); view.clipsToBounds = true }
+    public override func didLoad() { super.didLoad(); contentNode.clipsToBounds = true }
 
     public func apply(_ descriptor: AvatarDescriptor, presentation: AvatarPresentation = .thumbnail) {
         let same = self.descriptor?.id == descriptor.id && self.descriptor?.version == descriptor.version
@@ -91,16 +97,69 @@ public final class AvatarNode: ASDisplayNode, AvatarPlaybackParticipant {
         videoNode?.reset()
         playbackResourcesReleased = true
     }
+    /// Shrinks the picture to make room for the ring, as Telegram's chat list does.
+    public func setStoryRing(_ ring: AvatarStoryRing?, animated: Bool = false) {
+        guard storyRing != ring else { return }
+        let hadRing = storyRing != nil
+        storyRing = ring
+        if let ring {
+            let node = storyRingNode ?? StoryRingNode()
+            if storyRingNode == nil {
+                storyRingNode = node
+                insertSubnode(node, aboveSubnode: contentNode)
+                node.frame = bounds
+                node.alpha = 0
+            }
+            node.update(ring, cornerRadius: avatarCornerRadius, animated: animated && hadRing)
+        }
+        let removeRing = { [weak self] in
+            guard let self, self.storyRing == nil else { return }
+            self.storyRingNode?.removeFromSupernode()
+            self.storyRingNode = nil
+        }
+        guard isNodeLoaded, !bounds.isEmpty else {
+            storyRingNode?.alpha = 1
+            removeRing()
+            setNeedsLayout()
+            return
+        }
+        let changes = {
+            self.layoutContent()
+            self.storyRingNode?.alpha = ring == nil ? 0 : 1
+        }
+        if animated && !UIAccessibility.isReduceMotionEnabled {
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction],
+                           animations: changes) { _ in removeRing() }
+        } else {
+            changes()
+            removeRing()
+        }
+    }
+
     public override func didEnterHierarchy() { super.didEnterHierarchy(); setVisible(true) }
     public override func didExitHierarchy() { super.didExitHierarchy(); setVisible(false) }
 
     public override func layout() {
         super.layout()
-        placeholder.frame = bounds
-        imageNode.frame = bounds
-        videoNode?.frame = bounds
-        cornerRadius = avatarCornerRadius ?? min(bounds.width, bounds.height) / 2
+        layoutContent()
+        if let storyRing, let storyRingNode {
+            storyRingNode.frame = bounds
+            storyRingNode.update(storyRing, cornerRadius: avatarCornerRadius, animated: false)
+        }
         requestImage()
+    }
+
+    private func layoutContent() {
+        let local = CGRect(origin: .zero, size: bounds.size)
+        // bounds + position, not frame: the frame is undefined under the scale transform.
+        contentNode.bounds = local
+        contentNode.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        placeholder.frame = local
+        imageNode.frame = local
+        videoNode?.frame = local
+        contentNode.cornerRadius = avatarCornerRadius ?? min(bounds.width, bounds.height) / 2
+        let scale = storyRing.map { bounds.width > 0 ? max(bounds.width - $0.lineWidth * 4, 0) / bounds.width : 1 } ?? 1
+        contentNode.transform = CATransform3DMakeScale(scale, scale, 1)
     }
 
     private func requestImage() {
@@ -153,8 +212,8 @@ public final class AvatarNode: ASDisplayNode, AvatarPlaybackParticipant {
                     self.setState(self.imageNode.image == nil ? .unavailable : .photo)
                     AvatarPlaybackCoordinator.shared.update()
                 }
-                addSubnode(node)
-                node.frame = bounds
+                contentNode.addSubnode(node)
+                node.frame = CGRect(origin: .zero, size: bounds.size)
             }
             node.setSource(video)
             playbackResourcesReleased = false
@@ -189,6 +248,7 @@ public final class AvatarNode: ASDisplayNode, AvatarPlaybackParticipant {
         playbackAllowed = false
         playbackResourcesReleased = true
         videoFailed = false
+        setStoryRing(nil)
         setState(.initials)
     }
     deinit { imageTask?.cancel() }

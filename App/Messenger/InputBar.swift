@@ -441,6 +441,8 @@ final class InputBar: UIView, UITextViewDelegate {
         textView.becomeFirstResponder()
     }
 
+    var draftText: String { text }
+
     func setText(_ text: String, editing: Bool) {
         self.editing = editing
         textView.text = text

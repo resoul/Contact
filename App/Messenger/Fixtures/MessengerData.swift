@@ -16,9 +16,11 @@ enum MessengerData {
         Account(id: UUID(uuidString: "f8292fc4-0abd-4d9e-a1c8-eb94de3648e3")!, person: ChannelPerson(name: "Макс Тест", hue: 0.12), phone: "+44 7700 900123", username: "@max_test"),
     ]
 
+    /// Story counts differ per person so the chat list shows rings with 1…7 segments.
     static let storyUsers: [StoryUser] = trickPeople.prefix(7).enumerated().map { index, person in
         let scenes = DemoPhotos.Scene.allCases
-        return StoryUser(person: person, photos: [scenes[index % scenes.count], scenes[(index + 3) % scenes.count]])
+        let count = [2, 1, 3, 2, 5, 4, 7][index]
+        return StoryUser(person: person, photos: (0..<count).map { scenes[(index + $0 * 3) % scenes.count] })
     }
 
     /// A different chat list for every account, so switching accounts visibly changes the screen.

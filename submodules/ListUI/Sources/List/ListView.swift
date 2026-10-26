@@ -118,6 +118,8 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
         let anchor = anchorIndex.map { (itemIDs[$0], frames[$0].minY - contentOffset) }
         let oldOffset = contentOffset
         closeReveals(animated: false)
+        // The first snapshot appears at once, like Telegram's lists; only later changes animate.
+        let animated = animated && !itemIDs.isEmpty
         items = next
         itemIDs = nextIDs
         itemVersions = next.map(\.version)
@@ -222,9 +224,11 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
             let id = itemIDs[index]
             let reuseIdentifier = itemReuseIdentifiers[index]
             let node: ListItemNode
+            var placed = true
             if let existing = active[id], existing.reuseIdentifier == reuseIdentifier {
                 node = existing
             } else {
+                placed = false
                 if let old = active.removeValue(forKey: id) { recycle(old) }
                 node = pool[reuseIdentifier]?.popLast() ?? item.makeNode()
                 node.reuseIdentifier = reuseIdentifier
@@ -232,25 +236,40 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
                 node.view.isUserInteractionEnabled = true
                 active[id] = node
                 content.addSubnode(node)
-                if animated && inserted.contains(id) { node.view.alpha = 0 }
             }
-            let version = itemVersions[index]
-            if node.appliedVersion != version || node.appliedWidth != layoutWidth {
-                node.layoutOperation?.cancel()
-                node.layoutOperation = nil
-                let resolvedTheme = theme.resolved(for: view.traitCollection)
-                item.update(node: node, theme: resolvedTheme)
-                node.appliedVersion = version
-                node.appliedWidth = layoutWidth
-                configureGestures(node)
-                if let item = item as? any AsyncListItem {
-                    prepare(item, node: node, width: layoutWidth, theme: resolvedTheme)
+            // A new or pooled node still has a zero or stale frame. Configure and place it
+            // outside any running animation, so it never grows from the corner or slides
+            // in from its previous row; only an inserted row fades in.
+            if !placed {
+                UIView.performWithoutAnimation {
+                    configure(node, item: item, index: index)
+                    node.frame = frames[index]
+                    node.view.alpha = animated && inserted.contains(id) ? 0 : 1
+                    node.view.layoutIfNeeded()
                 }
+            } else {
+                configure(node, item: item, index: index)
+                if node.frame != frames[index] { node.frame = frames[index] }
             }
-            if node.frame != frames[index] { node.frame = frames[index] }
             if node.view.alpha != 1 { node.view.alpha = 1 }
         }
         updateMediaVisibility()
+    }
+
+    private func configure(_ node: ListItemNode, item: any ListItem, index: Int) {
+        let version = itemVersions[index]
+        if node.appliedVersion != version || node.appliedWidth != layoutWidth {
+            node.layoutOperation?.cancel()
+            node.layoutOperation = nil
+            let resolvedTheme = theme.resolved(for: view.traitCollection)
+            item.update(node: node, theme: resolvedTheme)
+            node.appliedVersion = version
+            node.appliedWidth = layoutWidth
+            configureGestures(node)
+            if let item = item as? any AsyncListItem {
+                prepare(item, node: node, width: layoutWidth, theme: resolvedTheme)
+            }
+        }
     }
 
     private func updateMediaVisibility() {

@@ -44,6 +44,24 @@ post of each public example has a collapsible community-context block. Context,
 translation and analytics are labelled demonstration data; no translation or
 analytics service is called.
 
-Quick Reply can also respond through the normal send path when an observed
-incoming history update produces a toast. The catalog's sample notification and
-the playground require no fabricated backend deliveries or recurring timers.
+Application notifications use `MessageNotificationView` and an account-owned
+coordinator. Incoming chat-list updates drive them from any app screen; the
+initial snapshot, muted chats and the currently visible conversation are
+suppressed. Replies persist in the outbox. Until a server transport exists,
+`DemoIncomingMessages` stores an incoming message from a random unmuted person
+about once a minute while the app is active and unlocked. LiquidIslandToast and
+the old Quick Reply demo stay available for comparison.
+
+Expansion starts from Telegram's in-app notification approach (`ApplicationContext`
+creates a chat in `.overlay` mode and `ChatControllerNode.animateInAsOverlay` grows
+it from the banner), but stays one surface. The card's header (avatar, name,
+close) and its simple reply field never leave it; there are no attachments or
+voice here. When replying starts, a child navigation controller preloads the
+Contact chat with `historyOnly: true` (no header, pinned bar or composer) inside
+the card. Pulling down drives an expansion value directly; the field sinks
+to the keyboard, the header compacts, and the history, kept at its final size,
+is revealed from the seam outwards. Release springs to the nearer end with the
+gesture's velocity. Open, sending keeps the card; collapsed, it closes it. Only
+an open card counts as the visible chat. The chat name opens the full chat
+with the draft. Close or a tap outside dismisses the card, and the coordinator
+resumes queued notifications.

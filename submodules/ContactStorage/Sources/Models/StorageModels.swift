@@ -45,6 +45,47 @@ public struct StoredChat: Equatable, Sendable {
     public let manuallyUnread: Bool
 }
 
+/// Chat kinds a folder takes in whole; stored as the `categories` bitmask.
+public struct ChatFolderCategories: OptionSet, Equatable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    public static let contacts = ChatFolderCategories(rawValue: 1 << 0)
+    public static let groups = ChatFolderCategories(rawValue: 1 << 1)
+    public static let channels = ChatFolderCategories(rawValue: 1 << 2)
+    public static let bots = ChatFolderCategories(rawValue: 1 << 3)
+    public static let nonContacts = ChatFolderCategories(rawValue: 1 << 4)
+}
+
+public struct StoredChatFolder: Equatable, Sendable {
+    public let id: UUID
+    public var title: String
+    public var emoticon: String?
+    /// Telegram's peer name color index, 0...6.
+    public var color: Int?
+    public var categories: ChatFolderCategories
+    public var excludeMuted: Bool
+    public var excludeRead: Bool
+    /// Always shown, whatever the categories and exclusions say.
+    public var includedPeers: [Int64]
+    /// Never shown, even when a category or an explicit include matches.
+    public var excludedPeers: [Int64]
+    public init(
+        id: UUID = UUID(),
+        title: String,
+        emoticon: String? = nil,
+        color: Int? = nil,
+        categories: ChatFolderCategories = [],
+        excludeMuted: Bool = false,
+        excludeRead: Bool = false,
+        includedPeers: [Int64] = [],
+        excludedPeers: [Int64] = []
+    ) {
+        self.id = id; self.title = title; self.emoticon = emoticon; self.color = color; self.categories = categories
+        self.excludeMuted = excludeMuted; self.excludeRead = excludeRead
+        self.includedPeers = includedPeers; self.excludedPeers = excludedPeers
+    }
+}
+
 public struct MessageCursor: Equatable, Sendable {
     public let timestamp: Int64
     public let localID: UUID

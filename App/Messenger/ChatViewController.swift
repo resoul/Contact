@@ -29,6 +29,13 @@ final class ChatViewController: UIViewController {
     private var loadingOlder = false
     private var hasOlderHistory = true
     private var chat: Chat
+    var chatID: Int { chat.id }
+    /// Prefilled composer text, focused on first appearance.
+    private let draft: String?
+    private var focusedDraft = false
+    /// Only the message list, for a notification card that supplies its own
+    /// header and composer around it.
+    let historyOnly: Bool
     private weak var home: HomeViewController?
     private var sections: [(title: String, messages: [Message])]
 
@@ -107,9 +114,11 @@ final class ChatViewController: UIViewController {
     private var replyTo: Message?
     private var editingID: Int?
 
-    init(chat: Chat, home: HomeViewController) {
+    init(chat: Chat, home: HomeViewController, draft: String? = nil, historyOnly: Bool = false) {
         self.chat = chat
         self.home = home
+        self.draft = draft
+        self.historyOnly = historyOnly
         storageSession = chat.id == VFXChatFixtures.playground.id ? nil : home.storageSession
         channelAccount = home.currentAccount
         sections = chat.id == VFXChatFixtures.playground.id ? VFXChatFixtures.messages()
@@ -187,6 +196,7 @@ final class ChatViewController: UIViewController {
         if #available(iOS 17.0, *) { view.keyboardLayoutGuide.usesBottomSafeArea = false }
         else { input.includesBottomSafeArea = false }
         input.onSend = { [weak self] text in self?.sendText(text) }
+        if let draft { input.setText(draft, editing: false) }
         input.onSendWithEffect = { [weak self] text, effect in self?.sendText(text, effect: effect) }
         input.onEffectsRequested = { [weak self] in
             guard let self else { return }
@@ -212,7 +222,16 @@ final class ChatViewController: UIViewController {
         buildSelectionBars()
         buildSearch()
         configureChannelChrome()
+        if historyOnly { stripChromeForHistory() }
         observeStoredHistory()
+    }
+
+    private func stripChromeForHistory() {
+        view.backgroundColor = .clear
+        table.keyboardDismissMode = .none
+        for chrome in [wallpaper, meshWallpaper, header, pinned, input, scrollDown] as [UIView] {
+            chrome.removeFromSuperview()
+        }
     }
 
     private func committed(_ action: () -> Void) {
@@ -233,10 +252,8 @@ final class ChatViewController: UIViewController {
         guard let storageSession else { return }
         let offset = table.contentOffset
         let bottom = distanceFromBottom < 80
-        let previousIDs = Set(sections.flatMap(\.messages).map(\.id))
         let temporary = sections.flatMap(\.messages).filter { ephemeralIDs.contains($0.id) }
         sections = storageSession.sections(for: chat.id)
-        let incoming = sections.flatMap(\.messages).last { !$0.outgoing && !$0.isDivider && !previousIDs.contains($0.id) }
         if !temporary.isEmpty {
             if sections.isEmpty { sections = [("Today", [])] }
             sections[sections.count - 1].messages.append(contentsOf: temporary)
@@ -246,10 +263,6 @@ final class ChatViewController: UIViewController {
         table.layoutIfNeeded()
         if bottom { scrollToBottom(animated: false) }
         else { table.contentOffset = offset }
-        if let incoming, let window = view.window, chat.kind != .channel {
-            LiquidIslandToast.show(in: window, title: chat.person.name, message: incoming.summary, symbol: "message.fill",
-                onReply: { [weak self] text in self?.sendText(text) })
-        }
     }
 
     private var nightSet = false
@@ -264,6 +277,14 @@ final class ChatViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        if let storageSession, (storageSession.chats.first { $0.id == chat.id }?.unread ?? 0) > 0 {
+            storageSession.markRead(chatID: chat.id)
+        }
+        if let draft, !draft.isEmpty, !focusedDraft {
+            focusedDraft = true
+            input.focus()
+        }
+        guard !historyOnly else { return }
         updateMeshWallpaper()
         if chat.kind == .channel {
             if !channelHintShown {
@@ -293,7 +314,8 @@ final class ChatViewController: UIViewController {
         view.addSubview(header)
         header.addSubview(headerBackground)
         var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: "chevron.backward", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
+        configuration.image = UIImage(systemName: "chevron.backward",
+                                      withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
         configuration.title = "Chats"
         configuration.imagePadding = 4
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8)
@@ -476,7 +498,8 @@ final class ChatViewController: UIViewController {
     }
 
     private var messageAreaBottom: CGFloat {
-        chat.kind == .channel ? view.bounds.height - view.safeAreaInsets.bottom : input.frame.minY
+        if historyOnly { return view.bounds.height }
+        return chat.kind == .channel ? view.bounds.height - view.safeAreaInsets.bottom : input.frame.minY
     }
 
     private var headerHeight: CGFloat { view.safeAreaInsets.top + 52 }
@@ -517,7 +540,7 @@ final class ChatViewController: UIViewController {
         selectionBar.viewWithTag(2)?.frame = CGRect(x: width - 60, y: 4, width: 52, height: 44)
 
         table.frame = view.bounds
-        let topInset = pinned.frame.maxY
+        let topInset = historyOnly ? 6 : pinned.frame.maxY
         let bottomInset = view.bounds.height - messageAreaBottom + 4
         let wasAtBottom = isNearBottom
         table.contentInset = UIEdgeInsets(top: topInset, left: 0, bottom: bottomInset, right: 0)
@@ -526,7 +549,7 @@ final class ChatViewController: UIViewController {
         reactionFluid.frame = CGRect(x: 0, y: topInset, width: width, height: max(0, messageAreaBottom - topInset))
         scrollDown.frame = CGRect(x: width - 54, y: messageAreaBottom - 54, width: 42, height: 42)
         updateNextChannelIndicator(feedback: false)
-        if !didScrollToBottom, input.frame.height > 0 {
+        if !didScrollToBottom, historyOnly || input.frame.height > 0 {
             didScrollToBottom = true
             table.layoutIfNeeded()
             scrollToBottom(animated: false)
@@ -653,6 +676,10 @@ final class ChatViewController: UIViewController {
         let link = input.linkPreview
         clearComposerMode()
         var message = Message(kind: .text(text), outgoing: true, time: now, read: false)
+        if let storageSession {
+            message.timestamp = storageSession.nextMessageTimestamp(chatID: chat.id)
+            message.time = StorageMapping.time(message.timestamp)
+        }
         message.reply = quote
         message.link = link
         message.sendEffect = effect
@@ -1650,7 +1677,7 @@ extension ChatViewController: UITableViewDataSource, UITableViewDelegate {
         if scrollView.isDragging || scrollView.isDecelerating { showDates() }
         scrollDown.setShown(distanceFromBottom > 220)
         // Pulling the chat down past its first message opens the mini profile.
-        if chat.kind != .channel, scrollView.isDragging, headerExpansion == 0, scrollView.contentOffset.y < -scrollView.contentInset.top - 90 {
+        if chat.kind != .channel, !historyOnly, scrollView.isDragging, headerExpansion == 0, scrollView.contentOffset.y < -scrollView.contentInset.top - 90 {
             setHeaderExpansion(1, animated: true)
         }
     }
@@ -1664,6 +1691,8 @@ extension ChatViewController: UITableViewDataSource, UITableViewDelegate {
         withVelocity velocity: CGPoint,
         targetContentOffset: UnsafeMutablePointer<CGPoint>
     ) {
+        // A notification card's history only scrolls: no Vanish Mode or channel pull there.
+        if historyOnly { return }
         if chat.kind != .channel {
             let bottom = max(-table.contentInset.top, table.contentSize.height - table.bounds.height + table.contentInset.bottom)
             if table.contentOffset.y - bottom > 72 {

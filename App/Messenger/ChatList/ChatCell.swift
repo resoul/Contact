@@ -33,6 +33,8 @@ final class ChatCell: ASDisplayNode, UIGestureRecognizerDelegate {
     var interactionPanGestures: [UIGestureRecognizer] { pan.map { [$0] } ?? [] }
     var selectionFailureGestures: [UIGestureRecognizer] { [pan, hold].compactMap { $0 } }
     var isRevealOpen: Bool { abs(offset) > 0.5 }
+    var chatID: Int? { chat?.id }
+    private var hasStory = false
 
     override init() {
         super.init()
@@ -60,13 +62,19 @@ final class ChatCell: ASDisplayNode, UIGestureRecognizerDelegate {
         slider.view.addGestureRecognizer(hold)
     }
 
-    func configure(_ chat: Chat, swipeEnabled: Bool, theme: ListTheme) {
+    func configure(_ chat: Chat, story: ChatStory?, swipeEnabled: Bool, theme: ListTheme) {
+        let sameChat = self.chat?.id == chat.id
         self.chat = chat
         self.swipeEnabled = swipeEnabled
         if isNodeLoaded { pan.isEnabled = swipeEnabled }
         if !swipeEnabled { close(animated: false) }
         slider.backgroundColor = theme.rowBackground
         avatar.apply(AvatarProvider.descriptor(for: chat.person, peerID: chat.id), presentation: .chatList)
+        hasStory = story != nil
+        avatar.setStoryRing(story.map {
+            AvatarStoryRing(totalCount: $0.total, unseenCount: $0.unseen,
+                            unseenColors: Palette.storyUnseen, seenColors: [Palette.storySeen, Palette.storySeen])
+        }, animated: sameChat)
         onlineDot.isHidden = !chat.online || chat.kind != .person
         onlineDot.borderColor = theme.rowBackground.cgColor
         // Existing controls change only on a model update, never on a scroll tick.
@@ -102,11 +110,21 @@ final class ChatCell: ASDisplayNode, UIGestureRecognizerDelegate {
         super.layout()
         slider.frame = bounds.offsetBy(dx: offset, dy: 0)
         avatar.frame = CGRect(x: 12, y: (bounds.height - 58) / 2, width: 58, height: 58)
-        onlineDot.frame = CGRect(x: 55.3, y: (bounds.height - 58) / 2 + 43.3, width: 15.6, height: 15.6)
+        onlineDot.frame = CGRect(x: 53.8, y: (bounds.height - 58) / 2 + 41.8, width: 15.6, height: 15.6)
         layoutButtons()
     }
 
+    /// The avatar opens stories instead of the chat, with a little slop around it.
+    func storyHit(_ point: CGPoint) -> Bool {
+        hasStory && !isRevealOpen && avatar.frame.offsetBy(dx: offset, dy: 0).insetBy(dx: -6, dy: -6).contains(point)
+    }
+
+    func avatarFrame(in view: UIView) -> CGRect {
+        avatar.view.convert(avatar.bounds, to: view)
+    }
+
     func prepareForReuse() {
+        hasStory = false
         viewportVisible = false
         viewportScrolling = true
         revealing = false

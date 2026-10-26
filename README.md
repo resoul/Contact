@@ -207,30 +207,43 @@ hosts the existing row; this is a list-engine migration, not a rewrite of its
 UIKit drawing. Real account snapshots and committed actions still come from
 `AccountSession`; tapping a row opens the existing `ChatViewController`.
 
-Without custom folders there is one All list with the original swipe actions.
-Creating a custom folder enables the existing built-in filters plus the custom
-folder pages, reveals the liquid folder strip and enables full-width paging.
+Without custom folders there is one All Chats list with the original swipe actions.
+Creating a custom folder adds its page next to All Chats, reveals the liquid
+folder strip and enables full-width paging.
 Row swipe gestures are disabled in folder mode. Holding a row opens the same
 preview with all five actions: Read/Unread, Pin/Unpin, Mute/Unmute, Delete and
 Archive. Story pull thresholds and the original spring-driven avatars
 are retained, and each folder has its own scroll position. The dialog screen,
 profile navigation, bottom tabs and database schema are unchanged.
 
-### Temporary chat folders
+### Chat folders
 
 Settings → Chat Folders opens folder management. Create Folder and the
-Add Folder menu shown by holding the bottom Chats tab share the same name
-prompt. Blank or whitespace-only names cannot be submitted. Folder names are
-trimmed, assigned stable UUIDs, and appear immediately in the horizontally
-scrollable folder strip above the current chat table. New folders are empty;
-chat assignment is deferred. Existing All / Personal / Channels / Bots filters
-continue to work.
+Add Folder menu shown by holding the bottom Chats tab open the folder editor,
+modelled on Telegram's: a name with an emoji icon, Included Chats and Excluded
+Chats sections, and a folder color. Telegram keeps colors behind Premium; here
+all seven are available. Add Chats opens a picker with whole chat types
+(Contacts, Non-Contacts, Groups, Channels, Bots) above every chat, with search;
+Add Chats to Exclude offers Muted and Read and the same chat list. A chat is
+either always included or always excluded, never both, and an exclusion wins.
+While no name is typed, a folder with a single type is named after it. A folder
+is saved only with a name and at least one chat or type. Contacts are the
+people of the Contacts tab. Telegram's Archived exclusion is left out because
+archived chats do not reach the chat list yet. Settings → Chat Folders is pushed like other settings screens: tap a folder to
+edit it, or tap Edit to delete folders and drag them into a new order. All
+Chats is one of the rows; it can be moved but not deleted. In Chats, the folder
+strip shows All Chats and the user's folders in that saved order; without
+folders there is only All Chats. The former Personal / Channels / Bots filter
+tabs are gone.
 
-`App/Messenger/Folders/FolderSessionStore.swift` keeps names only in process
-memory, separately for each account and shared across scenes. Account switching
-and backgrounding preserve them; terminating and relaunching Contact resets
-custom folders. They are not written to UserDefaults, ContactStorage or SQLite.
-The Chats tab exposes Add Folder as an accessibility action as well.
+Folders belong to the account and live in its encrypted database (migration
+`v003_chat_folders`, extended by `v004_chat_folder_style`): `chat_folders` holds
+the title, emoji, color, position, category bitmask and exclusion flags; `chat_folder_peers` holds included/excluded chats and is
+cleared by `ON DELETE CASCADE` when a chat goes away. All Chats' place in the
+order is the `folders_all_chats_position` key in `storage_metadata`. Folders are read in the
+same snapshot as the chat list (`StoredChatListState.folders`), so
+`AccountSession.folders` never lags the chats. The Chats tab exposes Add Folder
+as an accessibility action as well.
 
 ### Profile and shared list UI
 
@@ -278,6 +291,29 @@ the screen or when the app becomes inactive, and switching effects releases the
 previous view and its simulation resources after in-flight GPU work completes.
 
 ### VFX previews and integrations
+
+Settings → VFX → App Notifications exercises the application-wide foreground
+notification flow. Select a contact to insert an incoming fixture after three
+seconds, then navigate to any screen. Tap the banner (or pull it down) to reply;
+pull its header down another 84 points and release to expand that same card into
+the real chat. A fast downward pull also opens it. The draft moves into the
+chat composer. Tapping the chat name at the top opens the same conversation.
+VoiceOver exposes Reply and Open conversation actions.
+
+The notification grows downward from its existing frame while its header fades
+into the live chat, following Telegram's `.overlay` chat presentation. History
+and composer stay inside the notification's rounded, clipped surface. Close or
+tap outside to dismiss it and continue using the underlying screen.
+
+`MessageNotificationView` and `MessageNotificationCoordinator` are separate from
+the existing LiquidIslandToast demo. The coordinator observes new unread last
+messages through the selected account session, coalesces bursts per conversation,
+and queues other contacts while a notification is visible. Initial database
+snapshots, muted chats, channels, background/inactive scenes and the passcode
+screen do not produce banners. Incoming messages in the currently visible chat
+are marked read. Quick replies use the durable outbox; a failed save keeps the
+text available for retry. The explicit preview inserts real fixture messages;
+there is still no server transport or system push delivery.
 
 Settings → VFX opens the visual prototypes from `demo/controller/controller`:
 Matrix + Kinetic registration, Photo Feed, Voice Room, Bubble Cluster, Particle

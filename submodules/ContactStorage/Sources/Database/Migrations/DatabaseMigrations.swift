@@ -67,6 +67,38 @@ enum DatabaseMigrations {
                 INSERT INTO storage_metadata VALUES ('revision', '0');
                 """)
         }
+        migrator.registerMigration("v003_chat_folders") { db in
+            // Telegram-style filters: chat kinds by category bitmask, optional
+            // exclusions, and peers explicitly included or excluded.
+            try db.execute(sql: """
+                CREATE TABLE chat_folders (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    server_id INTEGER UNIQUE,
+                    title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+                    position INTEGER NOT NULL,
+                    categories INTEGER NOT NULL DEFAULT 0 CHECK (categories >= 0),
+                    exclude_muted INTEGER NOT NULL DEFAULT 0 CHECK (exclude_muted IN (0,1)),
+                    exclude_read INTEGER NOT NULL DEFAULT 0 CHECK (exclude_read IN (0,1))
+                );
+                CREATE INDEX chat_folders_order ON chat_folders(position, id);
+                CREATE TABLE chat_folder_peers (
+                    folder_id TEXT NOT NULL REFERENCES chat_folders(id) ON DELETE CASCADE,
+                    peer_id INTEGER NOT NULL REFERENCES chats(peer_id) ON DELETE CASCADE,
+                    role TEXT NOT NULL CHECK (role IN ('include','exclude')),
+                    PRIMARY KEY (folder_id, peer_id)
+                ) WITHOUT ROWID;
+                CREATE INDEX chat_folder_peers_peer ON chat_folder_peers(peer_id);
+                """)
+        }
+        migrator.registerMigration("v004_chat_folder_style") { db in
+            // Person chats split into contacts (bit 0) and non-contacts (bit 4);
+            // folders that took every person keep doing so.
+            try db.execute(sql: """
+                ALTER TABLE chat_folders ADD COLUMN emoticon TEXT;
+                ALTER TABLE chat_folders ADD COLUMN color INTEGER CHECK (color BETWEEN 0 AND 6);
+                UPDATE chat_folders SET categories = categories | 16 WHERE categories & 1 = 1;
+                """)
+        }
         let registered = migrator
         try pool.read { db in
             guard try !registered.hasBeenSuperseded(db) else { throw StorageError.unsupportedSchema }

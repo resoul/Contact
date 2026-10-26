@@ -1,32 +1,39 @@
 import UIKit
 
-/// Folder names only. Chat membership and editing are intentionally deferred.
+/// Settings → Chat Folders, as in Telegram: create a folder, tap one to edit it,
+/// and use Edit to delete folders or reorder them. All Chats can be moved among the
+/// folders but not deleted. Everything is stored in the account database.
 final class FoldersViewController: UITableViewController {
-    private let accountID: UUID
-    private let openFolder: (UUID?) -> Void
-    private var folders: [SessionFolder] = []
+    /// A row below Create Folder, in the order of the chat list's tabs.
+    private enum Slot {
+        case allChats
+        case folder(ChatFolder)
+    }
 
-    init(accountID: UUID, openFolder: @escaping (UUID?) -> Void) {
-        self.accountID = accountID
-        self.openFolder = openFolder
+    private weak var session: AccountSession?
+    private var slots: [Slot] = []
+
+    init(session: AccountSession) {
+        self.session = session
         super.init(style: .insetGrouped)
         title = "Chat Folders"
     }
 
-    required init?(coder: NSCoder) { fatalError("Use init(accountID:openFolder:)") }
+    required init?(coder: NSCoder) { fatalError("Use init(session:)") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         tableView.accessibilityIdentifier = "contact.folderSettings"
         tableView.backgroundColor = Palette.grouped
         tableView.rowHeight = 52
-        navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .close, target: self, action: #selector(close))
+        navigationItem.rightBarButtonItem = editButtonItem
         let header = UIView()
         let icon = Views.label("🗂️", size: 80)
         icon.textAlignment = .center
         icon.translatesAutoresizingMaskIntoConstraints = false
         header.addSubview(icon)
-        let description = Views.label("Create folders and switch between them in Chats.", size: 15, color: Palette.secondary)
+        let description = Views.label("Create folders for different groups of chats and quickly switch between them.",
+                                      size: 15, color: Palette.secondary)
         description.numberOfLines = 0
         description.textAlignment = .center
         description.translatesAutoresizingMaskIntoConstraints = false
@@ -42,8 +49,8 @@ final class FoldersViewController: UITableViewController {
         ])
         header.frame.size.height = 220
         tableView.tableHeaderView = header
-        NotificationCenter.default.addObserver(self, selector: #selector(foldersChanged(_:)),
-                                               name: FolderSessionStore.didChange, object: FolderSessionStore.shared)
+        NotificationCenter.default.addObserver(self, selector: #selector(foldersChanged),
+                                               name: AccountSession.foldersDidChange, object: session)
         reloadFolders()
     }
 
@@ -55,28 +62,53 @@ final class FoldersViewController: UITableViewController {
     }
 
     private func reloadFolders() {
-        folders = FolderSessionStore.shared.folders(for: accountID)
+        var slots = (session?.folders ?? []).map(Slot.folder)
+        slots.insert(.allChats, at: min(session?.allChatsPosition ?? 0, slots.count))
+        self.slots = slots
         tableView.reloadData()
+        // Nothing to reorder or delete without folders.
+        if slots.count < 2, isEditing { setEditing(false, animated: true) }
+        editButtonItem.isEnabled = slots.count > 1
     }
 
-    @objc private func foldersChanged(_ notification: Notification) {
-        guard notification.userInfo?["accountID"] as? UUID == accountID else { return }
-        reloadFolders()
+    @objc private func foldersChanged() { reloadFolders() }
+
+    private func saveOrder() {
+        var ids: [UUID] = []
+        var allChatsPosition = 0
+        for slot in slots {
+            switch slot {
+            case .allChats: allChatsPosition = ids.count
+            case .folder(let folder): ids.append(folder.id)
+            }
+        }
+        session?.reorderFolders(ids, allChatsPosition: allChatsPosition)
     }
 
-    @objc private func close() { dismiss(animated: true) }
+    private func confirmDelete(_ folder: ChatFolder) {
+        let alert = UIAlertController(title: "Delete “\(folder.name)”?", message: "Chats in this folder are not deleted.",
+                                      preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Delete Folder", style: .destructive) { [weak self] _ in
+            self?.session?.deleteFolder(id: folder.id)
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    // MARK: Table
 
     override func numberOfSections(in tableView: UITableView) -> Int { 1 }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { folders.count + 2 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { slots.count + 1 }
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { "Folders" }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        "New folders are empty for now. They are kept until the app restarts."
+        slots.count > 1 ? "Tap Edit to delete folders or change their order. All Chats can be moved but not deleted." : nil
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
         cell.backgroundColor = Palette.cell
         var content = cell.defaultContentConfiguration()
+        content.imageProperties.maximumSize = CGSize(width: 28, height: 28)
         if indexPath.row == 0 {
             content.text = "Create Folder"
             content.image = UIImage(systemName: "folder.badge.plus")
@@ -84,11 +116,23 @@ final class FoldersViewController: UITableViewController {
             content.imageProperties.tintColor = Palette.accent
             cell.accessibilityIdentifier = "contact.createFolder"
         } else {
-            content.text = indexPath.row == 1 ? "All Chats" : folders[indexPath.row - 2].name
-            content.image = UIImage(systemName: indexPath.row == 1 ? "bubble.left.and.bubble.right" : "folder")
             content.textProperties.color = Palette.text
-            content.imageProperties.tintColor = Palette.accent
-            cell.accessoryType = .disclosureIndicator
+            switch slots[indexPath.row - 1] {
+            case .allChats:
+                content.text = "All Chats"
+                content.image = UIImage(systemName: "bubble.left.and.bubble.right.fill")
+                content.imageProperties.tintColor = Palette.accent
+                cell.selectionStyle = .none
+                cell.accessibilityIdentifier = "contact.folderAllChats"
+            case .folder(let folder):
+                content.text = folder.name
+                content.image = FolderIcons.folder(folder, size: 28)
+                if let session {
+                    let count = session.chats.filter(folder.contains).count
+                    content.secondaryText = count == 0 ? "Empty" : "\(count)"
+                }
+                cell.accessoryType = .disclosureIndicator
+            }
         }
         cell.contentConfiguration = content
         return cell
@@ -96,14 +140,44 @@ final class FoldersViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        guard let session else { return }
         if indexPath.row == 0 {
-            FolderCreation.present(from: self, accountID: accountID) { [weak self] folder in
-                guard let self, let index = self.folders.firstIndex(where: { $0.id == folder.id }) else { return }
-                self.tableView.scrollToRow(at: IndexPath(row: index + 2, section: 0), at: .middle, animated: true)
-            }
-        } else {
-            let id = indexPath.row == 1 ? nil : folders[indexPath.row - 2].id
-            dismiss(animated: true) { [openFolder] in openFolder(id) }
+            FolderCreation.present(from: self, session: session)
+        } else if case .folder(let folder) = slots[indexPath.row - 1] {
+            navigationController?.pushViewController(FolderEditorViewController(session: session, folder: folder), animated: true)
         }
+    }
+
+    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool { indexPath.row > 0 }
+    override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool { indexPath.row > 0 }
+
+    override func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle {
+        guard indexPath.row > 0, case .folder = slots[indexPath.row - 1] else { return .none }
+        return .delete
+    }
+
+    override func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool { true }
+
+    override func tableView(
+        _ tableView: UITableView,
+        commit editingStyle: UITableViewCell.EditingStyle,
+        forRowAt indexPath: IndexPath
+    ) {
+        guard editingStyle == .delete, case .folder(let folder) = slots[indexPath.row - 1] else { return }
+        confirmDelete(folder)
+    }
+
+    override func tableView(
+        _ tableView: UITableView,
+        targetIndexPathForMoveFromRowAt source: IndexPath,
+        toProposedIndexPath proposed: IndexPath
+    ) -> IndexPath {
+        proposed.row < 1 ? IndexPath(row: 1, section: 0) : proposed
+    }
+
+    override func tableView(_ tableView: UITableView, moveRowAt source: IndexPath, to destination: IndexPath) {
+        let slot = slots.remove(at: source.row - 1)
+        slots.insert(slot, at: destination.row - 1)
+        saveOrder()
     }
 }

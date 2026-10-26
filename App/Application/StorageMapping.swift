@@ -64,6 +64,30 @@ enum StorageMapping {
                       outgoingRead: last?.outgoing == true ? last?.read : nil, online: identity?.online ?? false)
     }
 
+    private static let folderTypes: [(ChatFolderType, ChatFolderCategories)] = [
+        (.contacts, .contacts), (.nonContacts, .nonContacts), (.groups, .groups), (.channels, .channels), (.bots, .bots),
+    ]
+
+    static func folder(_ stored: StoredChatFolder) -> ChatFolder {
+        var folder = ChatFolder(id: stored.id, name: stored.title)
+        folder.emoji = stored.emoticon
+        folder.color = stored.color
+        folder.types = Set(folderTypes.filter { stored.categories.contains($0.1) }.map(\.0))
+        if stored.excludeMuted { folder.exclusions.insert(.muted) }
+        if stored.excludeRead { folder.exclusions.insert(.read) }
+        folder.included = Set(stored.includedPeers.map { Int($0) })
+        folder.excluded = Set(stored.excludedPeers.map { Int($0) })
+        return folder
+    }
+
+    static func stored(_ folder: ChatFolder) -> StoredChatFolder {
+        StoredChatFolder(id: folder.id, title: folder.name, emoticon: folder.emoji, color: folder.color,
+                         categories: ChatFolderCategories(folderTypes.filter { folder.types.contains($0.0) }.map(\.1)),
+                         excludeMuted: folder.exclusions.contains(.muted), excludeRead: folder.exclusions.contains(.read),
+                         includedPeers: folder.included.sorted().map { Int64($0) },
+                         excludedPeers: folder.excluded.sorted().map { Int64($0) })
+    }
+
     static func sections(_ messages: [Message]) -> [MessageSection] {
         var result: [MessageSection] = []
         for message in messages.sorted(by: { ($0.timestamp, $0.storageID.uuidString) < ($1.timestamp, $1.storageID.uuidString) }) {

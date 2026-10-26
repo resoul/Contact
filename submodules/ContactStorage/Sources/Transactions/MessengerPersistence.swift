@@ -38,6 +38,10 @@ public struct SeedConversation: Sendable {
 public struct StoredChatListState: Equatable, Sendable {
     public let revision: Int64
     public let chats: [StoredChat]
+    /// Read in the same snapshot as `chats`, so folder contents never lag the list.
+    public let folders: [StoredChatFolder]
+    /// Where All Chats sits among `folders`.
+    public let allChatsPosition: Int
 }
 
 public struct StoredHistoryState: Equatable, Sendable {
@@ -74,13 +78,21 @@ extension AccountStorage {
         try await write { db in try Self.ensurePeer(peer, db: db) }
     }
 
-    public func storeMessage(_ message: LocalMessage, creating peer: StoragePeer? = nil) async throws {
+    public func storeMessage(
+        _ message: LocalMessage,
+        creating peer: StoragePeer? = nil,
+        markingChatRead: Bool = false
+    ) async throws {
         try await write { db in
             if let peer {
                 guard peer.id == message.peerID else { throw StorageError.messageIdentityConflict }
                 try Self.ensurePeer(peer, db: db)
             }
             try Self.storeLocal(message, db: db)
+            if markingChatRead {
+                try db.execute(sql: "UPDATE messages SET is_unread = 0 WHERE peer_id = ? AND is_unread = 1", arguments: [message.peerID])
+                try db.execute(sql: "UPDATE chats SET manual_unread = 0 WHERE peer_id = ?", arguments: [message.peerID])
+            }
             try Self.recount(message.peerID, db: db)
             if message.outgoing && message.state == .pending {
                 try db.execute(sql: "INSERT OR IGNORE INTO outbox (id, message_local_id, kind) VALUES (?, ?, 'send_message')",
@@ -137,7 +149,8 @@ extension AccountStorage {
     }
 
     private static func fetchChatListState(_ db: Database) throws -> StoredChatListState {
-        StoredChatListState(revision: try revision(db), chats: try fetchChats(db, limit: 500))
+        StoredChatListState(revision: try revision(db), chats: try fetchChats(db, limit: 500), folders: try fetchChatFolders(db),
+                            allChatsPosition: try fetchAllChatsPosition(db))
     }
 
     private static func fetchHistoryState(_ db: Database, peerID: Int64, before: MessageCursor?, limit: Int) throws -> StoredHistoryState {

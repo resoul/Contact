@@ -60,11 +60,27 @@ final class RootViewController: UIViewController {
     var isDark: Bool { overrideUserInterfaceStyle == .dark }
 
     func push(_ controller: UIViewController) {
-        stack.pushViewController(controller, animated: true)
+        (notificationChatNavigation ?? stack).pushViewController(controller, animated: true)
     }
 
     func pop() {
-        stack.popViewController(animated: true)
+        if let navigation = notificationChatNavigation {
+            if navigation.viewControllers.count > 1 { navigation.popViewController(animated: true) }
+            else { navigation.close() }
+        } else { stack.popViewController(animated: true) }
+    }
+
+    weak var notificationChatNavigation: NotificationChatNavigationController?
+
+    var visibleChatID: Int? {
+        if let navigation = notificationChatNavigation { return (navigation.topViewController as? ChatViewController)?.chatID }
+        guard presentedViewController == nil else { return nil }
+        return (stack.topViewController as? ChatViewController)?.chatID
+    }
+
+    var allowsMessageNotifications: Bool {
+        isViewLoaded && view.window?.windowScene?.activationState == .foregroundActive
+            && !view.subviews.contains { $0 is PasscodeView }
     }
 
     /// Flips light/dark with a liquid flood from `point` (in this view).
@@ -80,7 +96,7 @@ final class RootViewController: UIViewController {
 
 extension RootViewController: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
-        stack.viewControllers.count > 1
+        notificationChatNavigation == nil && stack.viewControllers.count > 1
     }
 }
 
@@ -92,6 +108,8 @@ final class HomeViewController: UIViewController {
     private var storageTask: Task<Void, Never>?
     private(set) var accountContext: AccountContext?
     private(set) var storageSession: AccountSession?
+    lazy var messageNotifications = MessageNotificationCoordinator(home: self)
+    private lazy var demoIncoming = DemoIncomingMessages(home: self)
     private var storageSessions: [UUID: AccountSession] = [:]
     private var pendingInitialChat: Chat?
 
@@ -146,8 +164,6 @@ final class HomeViewController: UIViewController {
         tabBar.onSettingsDoubleTap = { [weak self] in self?.switchToNextAccount() }
         chatList.onUnreadChanged = { [weak self] count in self?.tabBar.setUnread(count, animated: true) }
         chatList.load(account: currentAccount, animated: false)
-        NotificationCenter.default.addObserver(self, selector: #selector(sessionFoldersChanged(_:)),
-                                               name: FolderSessionStore.didChange, object: FolderSessionStore.shared)
         tabBar.setUnread(chatList.unreadTotal, animated: false)
     }
 
@@ -207,11 +223,11 @@ final class HomeViewController: UIViewController {
 
     // MARK: Navigation shared by the pages
 
-    func openChat(_ chat: Chat) {
+    func openChat(_ chat: Chat, draft: String? = nil) {
         guard let session = storageSession else { showHint("Storage is still opening"); return }
         session.openChat(chat) { [weak self] in
             guard let self, self.storageSession === session else { return }
-            self.root?.push(ChatViewController(chat: chat, home: self))
+            self.root?.push(ChatViewController(chat: chat, home: self, draft: draft))
         }
     }
 
@@ -251,36 +267,35 @@ final class HomeViewController: UIViewController {
         show(.settings)
     }
 
+    /// Settings → Chat Folders. The app's stack keeps its bar hidden, so the screen
+    /// gets its own navigation (back, Edit, the editor) inside a host, like VFX pages.
     func openFolders() {
-        let accountID = account.id
-        let controller = FoldersViewController(accountID: accountID) { [weak self] id in
-            guard let self, self.account.id == accountID else { return }
-            self.openFolder(id)
-        }
-        let navigation = UINavigationController(rootViewController: controller)
+        guard let session = storageSession else { showHint("Storage is still opening"); return }
+        root?.push(VFXNavigationHost(FoldersViewController(session: session), onClose: { [weak self] in self?.root?.pop() }))
+    }
+
+    /// Opens the folder's editor; used by the empty folder's Add Chats button.
+    func editFolder(_ id: UUID) {
+        guard let session = storageSession, let root, root.presentedViewController == nil,
+              let folder = session.folders.first(where: { $0.id == id }) else { return }
+        let navigation = UINavigationController(rootViewController: FolderEditorViewController(session: session, folder: folder))
         navigation.modalPresentationStyle = .pageSheet
-        navigation.sheetPresentationController?.detents = [.large()]
-        root?.present(navigation, animated: true)
+        root.present(navigation, animated: true)
     }
 
     private func openFolder(_ id: UUID?) {
         tabBar.select(.chats)
         show(.chats)
-        chatList.selectSessionFolder(id)
+        chatList.selectFolder(id)
     }
 
     private func createFolder() {
-        let accountID = account.id
+        guard let session = storageSession else { showHint("Storage is still opening"); return }
         guard let root, root.presentedViewController == nil else { return }
-        FolderCreation.present(from: root, accountID: accountID) { [weak self] folder in
-            guard let self, self.account.id == accountID else { return }
-            self.openFolder(folder.id)
+        FolderCreation.present(from: root, session: session) { [weak self, weak session] id in
+            guard let self, let session, self.storageSession === session else { return }
+            self.openFolder(id)
         }
-    }
-
-    @objc private func sessionFoldersChanged(_ notification: Notification) {
-        guard notification.userInfo?["accountID"] as? UUID == account.id else { return }
-        chatList.refreshSessionFolders()
     }
 
     private func chatsHeld(_ gesture: UILongPressGestureRecognizer) {
@@ -395,6 +410,8 @@ final class HomeViewController: UIViewController {
 
     private func prepareAccountStorage() {
         storageTask?.cancel()
+        messageNotifications.bind(nil)
+        demoIncoming.bind(nil)
         accountContext = nil
         storageSession = nil
         let accountIndex = currentAccount
@@ -411,6 +428,8 @@ final class HomeViewController: UIViewController {
                 self.storageSessions[id.rawValue] = session
                 self.accountContext = context
                 self.storageSession = session
+                self.messageNotifications.bind(session)
+                self.demoIncoming.bind(session)
                 session.onError = { [weak self] _ in
                     guard let self, self.account.id == id.rawValue else { return }
                     self.showHint("Could not save the change. Please try again.")
@@ -451,6 +470,7 @@ final class HomeViewController: UIViewController {
 
     func lock() {
         guard let root else { return }
+        messageNotifications.suspend()
         let lock = PasscodeView(frame: root.view.bounds)
         root.view.addSubview(lock)
         lock.appear()

@@ -35,6 +35,11 @@ enum Palette {
     }
     static let outgoingMeta = dynamic(UIColor(red: 0.3, green: 0.65, blue: 0.3, alpha: 1), UIColor(white: 1, alpha: 0.65))
     static let storyRing = UIColor(red: 0.2, green: 0.62, blue: 1.0, alpha: 1)
+    /// Top-to-bottom gradient of an unseen story ring in the chat list.
+    static let storyUnseen = [UIColor(red: 0.2, green: 0.78, blue: 0.44, alpha: 1), storyRing]
+    /// Thin ring of watched stories, Telegram's default day/night values.
+    static let storySeen = dynamic(UIColor(red: 0.85, green: 0.85, blue: 0.88, alpha: 1),
+                                   UIColor(red: 0.28, green: 0.28, blue: 0.29, alpha: 1))
     /// Dark-only things (calls, the photo gallery) in light mode too.
     static let glass = UIColor(white: 1, alpha: 0.16)
 }

@@ -3,8 +3,14 @@ import ContactStorage
 
 @MainActor final class AccountSession {
     let context: AccountContext
+    /// Posted with this session as the object when its folders change.
+    static let foldersDidChange = Notification.Name("Contact.AccountSessionFoldersDidChange")
     private(set) var chats: [Chat] = []
+    private(set) var folders: [ChatFolder] = []
+    /// Where All Chats sits among `folders`, already clamped to their count.
+    private(set) var allChatsPosition = 0
     var onChatsChanged: ((UUID?) -> Void)?
+    var onIncomingMessage: ((Chat, Message) -> Void)?
     var onError: ((Error) -> Void)?
     private var chatState: StoredChatListState?
     private var historyStates: [Int: StoredHistoryState] = [:]
@@ -16,6 +22,8 @@ import ContactStorage
     private var writing = false
     private var pendingChats: StoredChatListState?
     private var pendingHistories: [Int: StoredHistoryState] = [:]
+    private var knownLastMessages: [Int64: UUID] = [:]
+    private let openedAt = Int64(Date().timeIntervalSince1970 * 1000)
 
     private init(context: AccountContext) { self.context = context }
     deinit { chatTask?.cancel(); historyTasks.values.forEach { $0.cancel() } }
@@ -67,11 +75,37 @@ import ContactStorage
         }
     }
 
-    func openChat(_ chat: Chat, completion: @escaping () -> Void) {
+    func openChat(
+        _ chat: Chat,
+        onFailure: @escaping () -> Void = {},
+        completion: @escaping () -> Void
+    ) {
         perform(chatID: chat.id, origin: UUID(), operation: { [context] in
             try await context.storage.ensureConversation(StorageMapping.peer(chat))
             try await context.storage.markChatRead(peerID: Int64(chat.id))
-        }, completion: completion)
+        }, onFailure: onFailure, completion: completion)
+    }
+
+    func reply(
+        to chat: Chat,
+        text: String,
+        completion: @escaping (Bool) -> Void
+    ) {
+        let timestamp = nextMessageTimestamp(chatID: chat.id)
+        var message = Message(kind: .text(text), outgoing: true, time: StorageMapping.time(timestamp), read: false)
+        message.timestamp = timestamp
+        let reply = message
+        perform(chatID: chat.id, origin: UUID(), operation: { [context] in
+            try await context.storage.storeMessage(StorageMapping.local(reply, chatID: chat.id),
+                                                    creating: StorageMapping.peer(chat), markingChatRead: true)
+        }, onFailure: { completion(false) }, completion: { completion(true) })
+    }
+
+    /// Fixtures may be dated later today. Keep a new local message after the
+    /// conversation's existing tail even before the future sync clock exists.
+    func nextMessageTimestamp(chatID: Int) -> Int64 {
+        let latest = chatState?.chats.first { $0.peer.id == Int64(chatID) }?.lastMessage?.timestamp ?? 0
+        return max(Int64(Date().timeIntervalSince1970 * 1000), latest + 1)
     }
 
     func save(_ message: Message, chatID: Int, origin: UUID, onFailure: @escaping () -> Void = {}, completion: @escaping () -> Void = {}) {
@@ -135,6 +169,29 @@ import ContactStorage
         }, completion: completion)
     }
 
+    func createFolder(_ folder: ChatFolder, onFailure: @escaping () -> Void = {}, completion: @escaping () -> Void = {}) {
+        let stored = StorageMapping.stored(folder)
+        perform(chatID: nil, origin: UUID(), operation: { [context] in try await context.storage.createChatFolder(stored) },
+                onFailure: onFailure, completion: completion)
+    }
+
+    func saveFolder(_ folder: ChatFolder, onFailure: @escaping () -> Void = {}, completion: @escaping () -> Void = {}) {
+        let stored = StorageMapping.stored(folder)
+        perform(chatID: nil, origin: UUID(), operation: { [context] in try await context.storage.updateChatFolder(stored) },
+                onFailure: onFailure, completion: completion)
+    }
+
+    func deleteFolder(id: UUID, completion: @escaping () -> Void = {}) {
+        perform(chatID: nil, origin: UUID(), operation: { [context] in try await context.storage.deleteChatFolder(id: id) },
+                completion: completion)
+    }
+
+    func reorderFolders(_ ids: [UUID], allChatsPosition: Int, completion: @escaping () -> Void = {}) {
+        perform(chatID: nil, origin: UUID(), operation: { [context] in
+            try await context.storage.reorderChatFolders(ids, allChatsPosition: allChatsPosition)
+        }, completion: completion)
+    }
+
     func markRead(chatID: Int) {
         perform(chatID: chatID, origin: UUID(), operation: { [context] in try await context.storage.markChatRead(peerID: Int64(chatID)) })
     }
@@ -191,7 +248,8 @@ import ContactStorage
                     guard !Task.isCancelled, let self else { return }
                     if self.writing { self.pendingChats = state; continue }
                     guard state.revision >= (self.chatState?.revision ?? -1) else { continue }
-                    let changed = self.chatState?.chats != state.chats
+                    let changed = self.chatState?.chats != state.chats || self.chatState?.folders != state.folders
+                        || self.chatState?.allChatsPosition != state.allChatsPosition
                     try self.applyChats(state)
                     if changed { self.onChatsChanged?(nil) }
                 }
@@ -200,8 +258,30 @@ import ContactStorage
     }
 
     private func applyChats(_ state: StoredChatListState) throws {
-        chats = try state.chats.map(StorageMapping.chat)
+        let mapped = try state.chats.map(StorageMapping.chat)
+        let previous = Dictionary(uniqueKeysWithValues: (chatState?.chats ?? []).map { ($0.peer.id, $0) })
+        var incoming: [(Chat, Message)] = []
+        for (stored, chat) in zip(state.chats, mapped) {
+            guard let message = stored.lastMessage else { continue }
+            let known = knownLastMessages[stored.peer.id]
+            knownLastMessages[stored.peer.id] = message.localID
+            // The initial snapshot establishes a baseline. Edits, read receipts and
+            // returning an old conversation to the list must not replay its banner.
+            guard chatState != nil, known != message.localID,
+                  !message.isOutgoing, message.isUnread, !stored.isMuted, chat.kind != .channel,
+                  message.timestamp >= (previous[stored.peer.id]?.lastMessage?.timestamp ?? openedAt),
+                  let value = try? StorageMapping.message(message) else { continue }
+            incoming.append((chat, value))
+        }
+        chats = mapped
+        let foldersChanged = chatState?.folders != state.folders || chatState?.allChatsPosition != state.allChatsPosition
+        folders = state.folders.map(StorageMapping.folder)
+        allChatsPosition = min(max(state.allChatsPosition, 0), folders.count)
         chatState = state
+        if foldersChanged { NotificationCenter.default.post(name: Self.foldersDidChange, object: self) }
+        for (chat, message) in incoming.sorted(by: { $0.1.timestamp < $1.1.timestamp }) {
+            onIncomingMessage?(chat, message)
+        }
     }
 
     private func applyHistory(_ state: StoredHistoryState, chatID: Int) throws {
@@ -223,7 +303,8 @@ import ContactStorage
         let histories = pendingHistories; pendingHistories.removeAll()
         do {
             if let chats, chats.revision > (chatState?.revision ?? -1) {
-                let changed = chatState?.chats != chats.chats
+                let changed = chatState?.chats != chats.chats || chatState?.folders != chats.folders
+                    || chatState?.allChatsPosition != chats.allChatsPosition
                 try applyChats(chats)
                 if changed { onChatsChanged?(nil) }
             }
