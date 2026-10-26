@@ -95,13 +95,14 @@ final class StoriesHeader: UIView {
         exitButton.frame = CGRect(x: 4, y: safeTop, width: 44, height: Self.titleHeight)
         composeButton.frame = CGRect(x: bounds.width - 48, y: safeTop, width: 44, height: Self.titleHeight)
         canvas.frame = CGRect(x: 0, y: 0, width: bounds.width, height: safeTop + Self.titleHeight + Self.storiesHeight + 20)
-        canvas.isPaused = false
         place()
+        if canvas.isPaused { canvas.renderFrame() }
     }
 
-    /// `amount`: 0 = stories folded into the title, 1 = poured out into the row.
     func setPull(_ amount: CGFloat) {
-        pull = amount
+        let next = min(max(amount, 0), 1)
+        guard pull != next else { return }
+        pull = next
         canvas.isPaused = false
         setNeedsLayout()
     }
@@ -119,7 +120,6 @@ final class StoriesHeader: UIView {
         return CGPoint(x: 8 + spacing * (CGFloat(index) + 0.5), y: safeTop + Self.titleHeight + 10 + expandedSize / 2)
     }
 
-    /// Lays out the title and the avatars from the springs.
     private func place() {
         let titleWidth = title.intrinsicContentSize.width
         let open = springs.map { min(max($0.value, 0), 1.15) }
@@ -135,7 +135,7 @@ final class StoriesHeader: UIView {
             let t = open[index]
             let start = stackCenter(index, titleWidth: titleWidth)
             let end = rowCenter(index)
-            // Drops sag a little on their way down, like they are poured.
+
             var center = CGPoint.lerp(start, end, t)
             center.y += sin(min(t, 1) * .pi) * 10
             let size = stackSize + (expandedSize - stackSize) * min(t, 1.05)
@@ -151,7 +151,7 @@ final class StoriesHeader: UIView {
             names[index].alpha = islandSmoothstep(0.7, 1, t)
             guard !seen[index] || t < 0.9 else { continue }
             let ring = size / 2 + 2 + 1.5 * min(t, 1)
-            // Close together they flow into one blob; apart, each is a ring of its own.
+
             shapes.append(.circle(center: center, radius: ring * avatar.alpha, blend: 14 * (1 - min(t, 1)) + 1))
         }
         canvas.shapes = shapes

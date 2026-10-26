@@ -172,6 +172,7 @@ final class HomeViewController: UIViewController {
     private func show(_ tab: TabBar.Tab) {
         let page = pages[tab.rawValue]
         guard page.view.isHidden else { return }
+        chatList.setTabVisible(page === chatList)
         for other in pages where other !== page {
             other.view.isHidden = true
         }
@@ -227,8 +228,8 @@ final class HomeViewController: UIViewController {
         }
     }
 
-    func openProfile(_ person: ChannelPerson, online: Bool) {
-        root?.push(ProfileViewController(person: person, online: online, home: self))
+    func openProfile(_ person: ChannelPerson, online: Bool, peerID: Int? = nil) {
+        root?.push(ProfileViewController(person: person, online: online, home: self, peerID: peerID))
     }
 
     func call(_ person: ChannelPerson, from sourceView: UIView? = nil) {

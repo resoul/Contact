@@ -1,6 +1,5 @@
 import Foundation
 
-/// Navigation/data identities are separate from ListUI and the row renderer.
 struct ChatListFolder {
     let id: String
     let title: String

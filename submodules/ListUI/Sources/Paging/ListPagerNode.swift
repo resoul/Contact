@@ -31,7 +31,7 @@ public final class ListPagerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         didSet { panes.values.forEach { $0.setExternalScrollDriver(verticalScrollDriver) } }
     }
     var horizontalGestureRecognizer: UIGestureRecognizer { _ = view; return pan }
-    var isPaging: Bool { settling || pan?.state == .began || pan?.state == .changed }
+    public var isPaging: Bool { settling || pan?.state == .began || pan?.state == .changed }
 
     public init(theme: ListTheme) {
         self.theme = theme

@@ -35,10 +35,22 @@ and applies app-specific content; use `RevealableItemNode` for swipe actions.
 The app owns handlers and mutations. Pass a new `ItemListState` to apply them;
 no full table reload is involved. A visible anchor is preserved across changes.
 
-This initial implementation uses synchronous row-height measurement and manual
-frames; ASTextNode renders text through AsyncDisplayKit. It is not Telegram's
-full asynchronous measurement pipeline or a chat-history engine. Long-history
-anchoring, media preloading and chat-specific grouping are future extensions.
+Row heights and list geometry use synchronous manual frames. `AsyncListItem`
+prepares text measurements and unloaded Texture nodes on a shared worker queue
+limited to two concurrent tasks. Its returned closure applies the result on the
+main thread. A changed version, width, theme, or recycled identity cancels the
+previous preparation; completion also checks operation and node identity before
+applying. Ordinary `ListItem` consumers keep their synchronous update path.
+Chat rows use this asynchronous path and layer-backed text/icon nodes. Gesture
+dependencies are configured on row updates rather than every scrolling frame.
+This is not Telegram's full list engine: variable-height background geometry,
+long-history anchoring and chat-specific grouping remain separate work.
+
+`ListItemNode.updateViewport` reports actual row visibility separately from
+preloading. Media is suspended during dragging, deceleration, and programmatic
+scrolling, then resumes after the scroll settles. Owners set
+`ListView.mediaPlaybackEnabled` to disable playback in covered screens or inactive
+pages. A retained but offscreen row must release its media resources.
 
 Contact's consumers are `App/Messenger/ChatList` and `App/Messenger/Profile`.
 The profile composes an app-owned photo/header, a pinchable media grid and

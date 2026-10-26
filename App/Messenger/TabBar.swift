@@ -1,15 +1,3 @@
-//
-//  TabBar.swift
-//  controller
-//
-//  Mini-Telegram's tab bar and the account menu that grows out of it.
-//
-//  The selection is a drop of liquid: its front races to the new tab while its back clings to the
-//  old one. The Settings tab shows the current account's avatar; holding it squeezes a menu out of
-//  the tab as liquid. With one account it is a short settings menu; with several it is the account
-//  list, and you choose by sliding the finger up without letting go.
-//
-
 import UIKit
 
 final class TabBar: UIView {
@@ -38,7 +26,6 @@ final class TabBar: UIView {
     static let height: CGFloat = 54
 
     var onSelect: ((Tab) -> Void)?
-    /// The Settings tab is being held: the menu follows this gesture.
     var onSettingsHold: ((UILongPressGestureRecognizer) -> Void)?
     var onChatsHold: ((UILongPressGestureRecognizer) -> Void)?
     var onAddFolder: (() -> Void)?
@@ -97,8 +84,8 @@ final class TabBar: UIView {
                 }]
             }
         }
+
         accessibilityElements = accessibleTabs
-        // Settings shows the account's avatar instead of the gear.
         icons[Tab.settings.rawValue].isHidden = true
         avatarRing.layer.borderWidth = 2
         avatarRing.layer.borderColor = Palette.accent.cgColor
@@ -259,8 +246,6 @@ extension TabBar: UIGestureRecognizerDelegate {
 
 // MARK: - Account menu
 
-/// A menu squeezed out of a tab as liquid. Rows are chosen by sliding the finger that opened it
-/// (release on a row) or by tapping once it is open.
 final class AccountMenu: UIView {
     struct Item {
         let title: String
@@ -287,7 +272,6 @@ final class AccountMenu: UIView {
     private var closing = false
     private let rowHeight: CGFloat = 50
 
-    /// `anchor` is the held tab's center in `host`'s coordinates.
     init(in host: UIView, anchor: CGPoint, items: [Item]) {
         self.items = items
         self.anchor = anchor
@@ -365,7 +349,6 @@ final class AccountMenu: UIView {
 
     // MARK: Finger tracking
 
-    /// Follows the holding finger (`point` in this view): the row under it lights up.
     func track(_ point: CGPoint) {
         let local = convert(point, to: content)
         var index: Int?
@@ -386,7 +369,6 @@ final class AccountMenu: UIView {
         }
     }
 
-    /// The holding finger lifted: picks the row under it, or stays open for taps.
     func release() {
         if let highlighted {
             pick(highlighted)
@@ -423,7 +405,6 @@ final class AccountMenu: UIView {
     private func step(_ dt: CFTimeInterval) {
         progress.step(toward: target, deltaTime: dt)
         let p = max(progress.value, 0)
-        // The blob on the tab, and the panel rising out of it.
         let tabBlob = IslandFluidShape.circle(center: anchor, radius: 22 * (1 - p * 0.35), blend: 0)
         let smallHalf = CGSize(width: 20, height: 20)
         let fullHalf = CGSize(width: panel.width / 2, height: panel.height / 2)
@@ -432,7 +413,7 @@ final class AccountMenu: UIView {
         let half = CGSize(width: smallHalf.width + (fullHalf.width - smallHalf.width) * p,
                           height: smallHalf.height + (fullHalf.height - smallHalf.height) * p)
         let box = IslandFluidShape(center: center, halfSize: half, cornerRadius: min(22, half.height), blend: 34 * (1 - p) + 6)
-        // A neck joins them until the panel has torn away.
+
         let neck = max(0, 1 - p * 1.3)
         canvas.shapes = [tabBlob, box]
         canvas.spikes = neck > 0.02 ? [IslandFluidSpike(base: anchor, tip: CGPoint(x: center.x, y: center.y + half.height * 0.6),

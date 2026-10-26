@@ -43,13 +43,14 @@ swift_library(
         ":MessengerShaders",
         "App/Messenger/MascotLogin/login_mascot.riv",
         "//libraries/rive:RiveRuntime-LICENSE.txt",
-    ],
+    ] + glob(["App/Messenger/Avatars/Resources/*"]),
     deps = [
         ":ParticleTypes",
         "//libraries/rive",
         "//submodules/ContactStorage",
         "//submodules/AsyncDisplayKit",
         "//submodules/ListUI",
+        "//submodules/AvatarUI",
     ],
 )
 
@@ -59,8 +60,6 @@ ios_application(
     families = ["iphone", "ipad"],
     infoplists = ["App/Info.plist"],
     minimum_os_version = "16.0",
-    # Device prefix is resolved from its profile; Keychain uses the app's exact group.
-    # Simulator identity is embedded by rules_apple and does not need a team/profile.
     entitlements = select({
         ":ios_device": ":DeviceEntitlements",
         "//conditions:default": "App/Simulator.entitlements",

@@ -27,7 +27,7 @@ final class SwipeButton: UIControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Content keeps its size and stays at the inner edge, like Telegram's.
+
         let contentWidth: CGFloat = 76
         let x = (bounds.width - contentWidth) / 2
         icon.frame = CGRect(x: x, y: bounds.midY - 22, width: contentWidth, height: 26)

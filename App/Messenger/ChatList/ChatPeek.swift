@@ -1,6 +1,5 @@
 import UIKit
 
-/// A long-pressed chat opens as a card over a blur, with a menu under it. Tap the card to go in.
 final class ChatPeek: UIView {
     var onOpen: (() -> Void)?
     var onAction: ((ChatCell.Action) -> Void)?

@@ -2,7 +2,6 @@ import UIKit
 import AsyncDisplayKit
 import ListUI
 
-/// The existing pinchable gallery participates in ListUI's single vertical scroll.
 final class ProfileMediaPane: ASDisplayNode, ScrollablePane {
     var node: ASDisplayNode { self }
     private let grid = MediaGrid(count: 72)
@@ -74,7 +73,7 @@ final class ProfileMediaPane: ASDisplayNode, ScrollablePane {
     }
 
     func setExternalScrollDriver(_ driver: ((CGFloat) -> Void)?) { externalScroll = driver }
-    func stopScrolling() {} // The container owns all motion; this pane has no native scroller.
+    func stopScrolling() {}
 
     @objc private func pinching(_ gesture: UIPinchGestureRecognizer) {
         if gesture.state == .began { zoomBegan?() }

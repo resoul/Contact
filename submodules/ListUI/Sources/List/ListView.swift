@@ -22,12 +22,28 @@ private final class ListScrollView: UIScrollView {
 }
 
 public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecognizerDelegate {
+    private static let layoutQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "Contact.ListUI.layout"
+        queue.qualityOfService = .userInitiated
+        queue.maxConcurrentOperationCount = 2
+        return queue
+    }()
     public var theme: ListTheme { didSet { if theme != oldValue { invalidatePresentation() } } }
     public var hasPages = false
     public var contentGeometryChanged: (() -> Void)?
     public var scrollingChanged: ((ListView) -> Void)?
     public var scrollingBegan: ((ListView) -> Void)?
     public var scrollingTarget: ((ListView, CGPoint, CGPoint) -> CGPoint)?
+    public var mediaPlaybackEnabled = true {
+        didSet {
+            guard mediaPlaybackEnabled != oldValue else { return }
+            updateMediaVisibility()
+        }
+    }
+    private var mediaScrolling = false
+    private var lastMediaScrollTime: CFTimeInterval = 0
+    private var mediaResume: DispatchWorkItem?
     public var contentInsets: UIEdgeInsets = .zero {
         didSet {
             guard isNodeLoaded, contentInsets != oldValue else { return }
@@ -38,6 +54,9 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     var pagingRecognizer: UIGestureRecognizer?
     var gestureLocation: ((UIView, CGPoint) -> (CGFloat, CGFloat))?
     private var items: [any ListItem] = []
+    private var itemIDs: [String] = []
+    private var itemVersions: [Int] = []
+    private var itemReuseIdentifiers: [String] = []
     private var frames: [CGRect] = []
     private var active: [String: ListItemNode] = [:]
     private var pool: [String: [ListItemNode]] = [:]
@@ -93,15 +112,19 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     }
 
     public func apply(items next: [any ListItem], animated: Bool = true) {
-        let transaction = ListTransaction(previous: items.map(\.id), next: next.map(\.id))
+        let nextIDs = next.map(\.id)
+        let transaction = ListTransaction(previous: itemIDs, next: nextIDs)
         let anchorIndex = frames.firstIndex { $0.maxY > contentOffset }
-        let anchor = anchorIndex.map { (items[$0].id, frames[$0].minY - contentOffset) }
+        let anchor = anchorIndex.map { (itemIDs[$0], frames[$0].minY - contentOffset) }
         let oldOffset = contentOffset
         closeReveals(animated: false)
         items = next
+        itemIDs = nextIDs
+        itemVersions = next.map(\.version)
+        itemReuseIdentifiers = next.map(\.reuseIdentifier)
         guard isNodeLoaded, layoutWidth > 0 else { setNeedsLayout(); return }
         rebuildFrames()
-        if oldOffset > 0, let anchor, let index = items.firstIndex(where: { $0.id == anchor.0 }) {
+        if oldOffset > 0, let anchor, let index = itemIDs.firstIndex(of: anchor.0) {
             restoreOffset(frames[index].minY - anchor.1)
         } else {
             restoreOffset(oldOffset)
@@ -110,6 +133,7 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
             guard let node = active.removeValue(forKey: id) else { continue }
 
             node.view.isUserInteractionEnabled = false
+            node.updateViewport(isVisible: false, isScrolling: false)
             ListTransition.animate(animated, changes: { node.view.alpha = 0 }, completion: { [weak self] _ in
                 self?.recycle(node)
             })
@@ -189,34 +213,101 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
         }
         var indices: [Int] = []
         while low < frames.count && frames[low].minY <= preload.maxY { indices.append(low); low += 1 }
-        let visibleIDs = Set(indices.map { items[$0].id })
+        let visibleIDs = Set(indices.map { itemIDs[$0] })
         for id in Array(active.keys) where !visibleIDs.contains(id) {
             if let node = active.removeValue(forKey: id) { recycle(node) }
         }
         for index in indices {
             let item = items[index]
+            let id = itemIDs[index]
+            let reuseIdentifier = itemReuseIdentifiers[index]
             let node: ListItemNode
-            if let existing = active[item.id], existing.reuseIdentifier == item.reuseIdentifier {
+            if let existing = active[id], existing.reuseIdentifier == reuseIdentifier {
                 node = existing
             } else {
-                if let old = active.removeValue(forKey: item.id) { recycle(old) }
-                node = pool[item.reuseIdentifier]?.popLast() ?? item.makeNode()
-                node.reuseIdentifier = item.reuseIdentifier
-                node.itemID = item.id
+                if let old = active.removeValue(forKey: id) { recycle(old) }
+                node = pool[reuseIdentifier]?.popLast() ?? item.makeNode()
+                node.reuseIdentifier = reuseIdentifier
+                node.itemID = id
                 node.view.isUserInteractionEnabled = true
-                active[item.id] = node
+                active[id] = node
                 content.addSubnode(node)
-                if animated && inserted.contains(item.id) { node.view.alpha = 0 }
+                if animated && inserted.contains(id) { node.view.alpha = 0 }
             }
-            if node.appliedVersion != item.version || node.appliedWidth != layoutWidth {
-                item.update(node: node, theme: theme.resolved(for: view.traitCollection))
-                node.appliedVersion = item.version
+            let version = itemVersions[index]
+            if node.appliedVersion != version || node.appliedWidth != layoutWidth {
+                node.layoutOperation?.cancel()
+                node.layoutOperation = nil
+                let resolvedTheme = theme.resolved(for: view.traitCollection)
+                item.update(node: node, theme: resolvedTheme)
+                node.appliedVersion = version
                 node.appliedWidth = layoutWidth
+                configureGestures(node)
+                if let item = item as? any AsyncListItem {
+                    prepare(item, node: node, width: layoutWidth, theme: resolvedTheme)
+                }
             }
-            configureGestures(node)
-            node.frame = frames[index]
-            node.view.alpha = 1
+            if node.frame != frames[index] { node.frame = frames[index] }
+            if node.view.alpha != 1 { node.view.alpha = 1 }
         }
+        updateMediaVisibility()
+    }
+
+    private func updateMediaVisibility() {
+        let viewport = CGRect(x: 0, y: scrollView.contentOffset.y + contentInsets.top,
+                              width: bounds.width,
+                              height: max(0, bounds.height - contentInsets.top - contentInsets.bottom))
+        for node in active.values {
+            let visibleHeight = node.frame.intersection(viewport).height
+            let visible = mediaPlaybackEnabled && node.frame.height > 0
+                && visibleHeight >= node.frame.height * 0.75
+            node.updateViewport(isVisible: visible, isScrolling: mediaScrolling)
+        }
+    }
+
+    private func suspendMediaForScrolling() {
+        lastMediaScrollTime = CACurrentMediaTime()
+        if !mediaScrolling {
+            mediaScrolling = true
+            updateMediaVisibility()
+        }
+        scheduleMediaResume()
+    }
+
+    private func scheduleMediaResume() {
+        guard mediaResume == nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.mediaResume = nil
+            if self.scrollView.isDragging || self.scrollView.isDecelerating
+                || CACurrentMediaTime() - self.lastMediaScrollTime < 0.2 {
+                self.scheduleMediaResume()
+                return
+            }
+            self.mediaScrolling = false
+            self.updateMediaVisibility()
+        }
+        mediaResume = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+    }
+
+    private func prepare(_ item: any AsyncListItem, node: ListItemNode, width: CGFloat, theme: ListTheme) {
+        let id = item.id
+        let traits = view.traitCollection
+        let operation = BlockOperation()
+        node.layoutOperation = operation
+        operation.addExecutionBlock { [weak self, weak node, weak operation] in
+            guard let operation, !operation.isCancelled else { return }
+            let apply = item.prepareLayout(for: width, theme: theme, traits: traits)
+            guard !operation.isCancelled else { return }
+            DispatchQueue.main.async { [weak self, weak node] in
+                guard let self, let node, !operation.isCancelled,
+                      self.active[id] === node, node.layoutOperation === operation else { return }
+                node.layoutOperation = nil
+                apply(node)
+            }
+        }
+        Self.layoutQueue.addOperation(operation)
     }
 
     private func configureGestures(_ node: ListItemNode) {
@@ -240,6 +331,7 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     }
 
     private func recycle(_ node: ListItemNode) {
+        node.updateViewport(isVisible: false, isScrolling: false)
         node.removeFromSupernode()
         let kind = node.reuseIdentifier
         node.prepareForReuse()
@@ -266,10 +358,12 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        suspendMediaForScrolling()
         updateVisible()
         scrollingChanged?(self)
     }
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        suspendMediaForScrolling()
         closeReveals()
         scrollingBegan?(self)
     }
@@ -277,6 +371,14 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
                                          targetContentOffset: UnsafeMutablePointer<CGPoint>) {
         if let scrollingTarget { targetContentOffset.pointee = scrollingTarget(self, velocity, targetContentOffset.pointee) }
     }
+
+    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { scheduleMediaResume() }
+    }
+    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { scheduleMediaResume() }
+    public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) { scheduleMediaResume() }
+
+    deinit { mediaResume?.cancel() }
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         var target = touch.view

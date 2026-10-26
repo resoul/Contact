@@ -310,7 +310,7 @@ final class ChatViewController: UIViewController {
         statusDots.alpha = 0
         header.addSubview(statusDots)
         setStatus(typing: false)
-        avatar.set(chat.person, size: 38)
+        avatar.set(chat.person, size: 38, peerID: chat.id)
         avatar.online = chat.online
         avatar.isUserInteractionEnabled = true
         avatar.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openProfile)))
@@ -586,7 +586,7 @@ final class ChatViewController: UIViewController {
 
     @objc private func openProfile() {
         view.endEditing(true)
-        home?.openProfile(chat.person, online: chat.online)
+        home?.openProfile(chat.person, online: chat.online, peerID: chat.id)
     }
 
     // MARK: Model helpers
@@ -1998,7 +1998,7 @@ private extension ChatViewController {
         table.layoutIfNeeded()
         initialPosition()
         nameLabel.text = next.person.name
-        avatar.set(next.person, size: 38)
+        avatar.set(next.person, size: 38, peerID: next.id)
         avatar.online = false
         setStatus(typing: false)
         layoutHeader()

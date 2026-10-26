@@ -1,7 +1,5 @@
 import UIKit
 
-/// Shared media whose column count follows a pinch continuously: every cell sits between its spot
-/// in the two neighbouring layouts, so the grid flows from 3 to 5 columns rather than jumping.
 final class MediaGrid: UIView {
     var onHeightChange: (() -> Void)?
 
@@ -54,7 +52,6 @@ final class MediaGrid: UIView {
         return height(columns: low, width: width) * (1 - t) + height(columns: high, width: width) * t
     }
 
-    /// Which month (counted back from now) the row at `y` belongs to.
     func month(at y: CGFloat) -> Int {
         let count = Int(round(columns))
         let row = Int(y / (cellSize(count, width: bounds.width) + gap))
@@ -86,7 +83,6 @@ final class MediaGrid: UIView {
             link = nil
             pinchStart = columns
         case .changed:
-            // Spread fingers = bigger photos = fewer columns. Soft limits past 2…6.
             var value = pinchStart / gesture.scale
             if value < 2 { value = 2 - (2 - value) * 0.3 }
             if value > 6 { value = 6 + (value - 6) * 0.3 }

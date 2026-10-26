@@ -1,11 +1,3 @@
-//
-//  VFXMetalView.swift
-//  controller
-//
-//  Shared plumbing for MetalVFXEngine: one GPU context, pipeline caches, snapshot → texture,
-//  and a CAMetalLayer-backed base view driven by a 120 Hz (ProMotion) display link.
-//
-
 import UIKit
 import Metal
 
@@ -70,7 +62,6 @@ final class VFXGPU {
         }
     }
 
-    /// Renders an on-screen view into a premultiplied BGRA texture (top-left origin), keeping transparency.
     func makeTexture(snapshotting view: UIView, scale: CGFloat) -> MTLTexture? {
         let width = Int((view.bounds.width * scale).rounded())
         let height = Int((view.bounds.height * scale).rounded())
@@ -99,8 +90,6 @@ final class VFXGPU {
     }
 }
 
-/// Snapshots live UI into textures every frame without reallocating: one reused bitmap and a
-/// small ring of textures (the GPU may still be reading the previous frames' ones).
 final class VFXSnapshotter {
     private var context: CGContext?
     private var ring: [MTLTexture] = []
@@ -108,8 +97,6 @@ final class VFXSnapshotter {
     private var pixelSize: (width: Int, height: Int) = (0, 0)
     private var mipmapped = false
 
-    /// Draws `region` (in `view`'s coordinates) of `view` as it is on screen right now.
-    /// With `mipmapped`, the mip chain is generated in `commandBuffer` (needed for blur via lod).
     func snapshot(_ view: UIView, region: CGRect, scale: CGFloat, mipmapped: Bool = false,
                   commandBuffer: MTLCommandBuffer? = nil) -> MTLTexture? {
         guard let gpu = VFXGPU.shared else { return nil }
@@ -153,24 +140,21 @@ final class VFXSnapshotter {
     }
 }
 
-/// Base class: a CAMetalLayer that tracks the view's size and screen scale, plus a display link.
-/// Subclasses override `update(deltaTime:)` for simulation and `encode(into:target:)` for drawing.
 class VFXMetalView: UIView {
     override class var layerClass: AnyClass { CAMetalLayer.self }
 
     let gpu = VFXGPU.shared
     var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
 
-    /// Stops the display link without removing the view. Rendering resumes from where it stopped.
     var isPaused = false {
         didSet { updateDisplayLink() }
     }
     var preferredFramesPerSecond: Float = 120 {
         didSet { applyFrameRate() }
     }
-    /// Animation clock in seconds; paused time is excluded.
+    
     private(set) var time: CFTimeInterval = 0
-    /// Background the target is cleared to; transparent by default (overlay views).
+
     var clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
 
     private var displayLink: CADisplayLink?
@@ -216,12 +200,11 @@ class VFXMetalView: UIView {
         let size = CGSize(width: (bounds.width * contentScaleFactor).rounded(),
                           height: (bounds.height * contentScaleFactor).rounded())
         guard size.width > 0, size.height > 0 else { return }
-        // Only on a real resize: layout passes are frequent (any sibling changing size relayouts its
-        // parents), and rendering synchronously here can block on nextDrawable mid-scroll.
+
         if size != metalLayer.drawableSize {
             metalLayer.drawableSize = size
             drawableSizeDidChange(size)
-            renderFrame()   // fill the new size right away instead of waiting for the next tick
+            renderFrame()
         }
     }
 
@@ -231,7 +214,6 @@ class VFXMetalView: UIView {
 
     func update(deltaTime: CFTimeInterval) {}
 
-    /// Encode this frame's passes. The default just clears to `clearColor`.
     func encode(into commandBuffer: MTLCommandBuffer, target: MTLTexture) {
         commandBuffer.makeRenderCommandEncoder(descriptor: renderPass(target: target))?.endEncoding()
     }
@@ -245,7 +227,6 @@ class VFXMetalView: UIView {
         return pass
     }
 
-    /// Draws one frame immediately (also used by subclasses to refresh while paused).
     func renderFrame() {
         guard let gpu, let drawable = metalLayer.nextDrawable(),
               let commandBuffer = gpu.queue.makeCommandBuffer() else { return }
@@ -292,7 +273,6 @@ class VFXMetalView: UIView {
     }
 }
 
-/// Weak trampoline: CADisplayLink retains its target. Invalidates itself once the view is gone.
 private final class VFXDisplayLinkTarget: NSObject {
     private weak var view: VFXMetalView?
 
@@ -310,7 +290,6 @@ private final class VFXDisplayLinkTarget: NSObject {
 }
 
 extension UIColor {
-    /// Resolved sRGB components, for passing colors to shaders.
     func vfxSIMD(with traits: UITraitCollection = .current) -> SIMD4<Float> {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         resolvedColor(with: traits).getRed(&r, green: &g, blue: &b, alpha: &a)

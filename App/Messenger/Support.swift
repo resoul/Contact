@@ -104,48 +104,6 @@ enum Views {
 }
 
 /// An avatar with an optional green "online" dot cut out of it.
-final class AvatarView: UIView {
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        guard previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle else { return }
-            self.dot.layer.borderColor = Palette.background.resolvedColor(with: self.traitCollection).cgColor
-    }
-
-    let image = UIImageView()
-    private let dot = UIView()
-
-    var online = false {
-        didSet { dot.isHidden = !online }
-    }
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        addSubview(image)
-        dot.backgroundColor = Palette.online
-        dot.layer.borderWidth = 2.5
-        dot.isHidden = true
-        addSubview(dot)
-
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func set(_ person: ChannelPerson, size: CGFloat) {
-        image.image = ChannelAvatar.image(for: person, size: size)
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        image.frame = bounds
-        let size = bounds.width * 0.27
-        dot.frame = CGRect(x: bounds.width - size + 1, y: bounds.height - size + 1, width: size, height: size)
-        dot.layer.cornerRadius = size / 2
-        dot.layer.borderColor = Palette.background.resolvedColor(with: traitCollection).cgColor
-    }
-}
-
 /// One or two checkmarks; the second one slides in when the message is read.
 final class ChecksView: UIView {
     private let first = UIImageView()

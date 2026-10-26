@@ -1,7 +1,6 @@
 import UIKit
 import ContactStorage
 
-/// Committed snapshots only. UIKit animations are replayed after the database transaction succeeds.
 @MainActor final class AccountSession {
     let context: AccountContext
     private(set) var chats: [Chat] = []
@@ -196,7 +195,6 @@ import ContactStorage
     }
 
     private func applyHistory(_ state: StoredHistoryState, chatID: Int) throws {
-        // Validate decoding before publishing a snapshot; corrupt payloads surface as storage errors.
         _ = try state.messages.map(StorageMapping.message)
         let older: [StoredMessage]
         if state.messages.count == 500, let boundary = state.messages.last {

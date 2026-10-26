@@ -1,6 +1,7 @@
 import UIKit
 import AsyncDisplayKit
 import ListUI
+import AvatarUI
 
 /// Profile with a shared collapsing header and independently scrolling media panes.
 final class ProfileViewController: UIViewController {
@@ -19,7 +20,11 @@ final class ProfileViewController: UIViewController {
     private let mediaPane = ProfileMediaPane()
     private var savedPopGestureEnabled: Bool?
     private let content = UIView()
-    private let photo = UIImageView()
+    private let photo = UIView()
+    private let avatarNode = AvatarUI.AvatarNode()
+    private let providedAvatars: [AvatarDescriptor]?
+    private let peerID: Int?
+    private var profileVisible = false
     private let photoShade = CAGradientLayer()
     private let segments = UIStackView()
     private let name = Views.label(size: 24, weight: .semibold)
@@ -40,13 +45,16 @@ final class ProfileViewController: UIViewController {
     private var open = Spring1D(0, stiffness: 15, dampingRatio: 0.78)
     private var link: CADisplayLink?
     private var lastTime: CFTimeInterval?
-    private var photos: [UIImage] = []
+    private var photos: [AvatarDescriptor] = []
     private var currentPhoto = 0
 
     private let avatarSize: CGFloat = 100
 
-    init(person: ChannelPerson, online: Bool, home: HomeViewController) {
+    init(person: ChannelPerson, online: Bool, home: HomeViewController, peerID: Int? = nil,
+         avatarGallery: [AvatarDescriptor]? = nil) {
         self.person = person
+        self.peerID = peerID
+        providedAvatars = avatarGallery
         self.online = online
         self.home = home
         super.init(nibName: nil, bundle: nil)
@@ -79,11 +87,12 @@ final class ProfileViewController: UIViewController {
             self.monthPill.alpha = 0
         }
 
-        photos = [Self.squareAvatar(person)]
-            + [DemoPhotos.Scene.sunset, .aurora, .city].enumerated().map { index, scene in
-                DemoPhotos.image(scene, size: CGSize(width: 420, height: 420), seed: UInt64(index + 21))
-            }
-        photo.image = photos[0]
+        photos = providedAvatars.flatMap { $0.isEmpty ? nil : $0 }
+            ?? AvatarProvider.gallery(for: person, peerID: peerID)
+        avatarNode.avatarCornerRadius = 0
+        avatarNode.isUserInteractionEnabled = false
+        photo.addSubview(avatarNode.view)
+        updateAvatarContent()
         photo.contentMode = .scaleAspectFill
         photo.clipsToBounds = true
         photo.isUserInteractionEnabled = true
@@ -198,22 +207,6 @@ final class ProfileViewController: UIViewController {
         showHint()
     }
 
-    /// The avatar's gradient and initials on a full square, for the open gallery.
-    private static func squareAvatar(_ person: ChannelPerson) -> UIImage {
-        let size: CGFloat = 420
-        return UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { context in
-            let top = UIColor(hue: person.hue, saturation: 0.55, brightness: 0.98, alpha: 1)
-            let bottom = UIColor(hue: person.hue + 0.06, saturation: 0.75, brightness: 0.78, alpha: 1)
-            let gradient = CGGradient(colorsSpace: nil, colors: [top.cgColor, bottom.cgColor] as CFArray, locations: [0, 1])!
-            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size), options: [])
-            let text = person.initials as NSString
-            let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: size * 0.4, weight: .semibold),
-                                                             .foregroundColor: UIColor.white]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(at: CGPoint(x: (size - textSize.width) / 2, y: (size - textSize.height) / 2), withAttributes: attributes)
-        }
-    }
-
     private func showHint() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
@@ -233,6 +226,7 @@ final class ProfileViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         container.setSuspended(false)
+        profileVisible = true
         if let gesture = navigationController?.interactivePopGestureRecognizer {
             savedPopGestureEnabled = gesture.isEnabled
             gesture.isEnabled = false
@@ -242,6 +236,8 @@ final class ProfileViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         container.setSuspended(true)
+        profileVisible = false
+        avatarNode.setVisible(false)
         link?.invalidate()
         link = nil
         monthFade?.cancel()
@@ -313,6 +309,8 @@ final class ProfileViewController: UIViewController {
                              width: folded.width + (opened.width - folded.width) * p,
                              height: folded.height + (opened.height - folded.height) * p)
         photo.layer.cornerRadius = avatarSize / 2 * max(0, 1 - p * 1.2)
+        avatarNode.frame = photo.bounds
+        updateAvatarVisibility()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         photoShade.frame = photo.bounds
@@ -354,9 +352,10 @@ final class ProfileViewController: UIViewController {
         UIImpactFeedbackGenerator(style: value ? .medium : .light).impactOccurred()
         if !value {
             currentPhoto = 0
-            photo.image = photos[0]
+            updateAvatarContent()
             updateSegments()
         } else {
+            updateAvatarContent()
             updateSegments()
         }
         startLink()
@@ -414,10 +413,28 @@ final class ProfileViewController: UIViewController {
         }
         currentPhoto = next
         UISelectionFeedbackGenerator().selectionChanged()
-        UIView.transition(with: photo, duration: 0.2, options: .transitionCrossDissolve) {
-            self.photo.image = self.photos[next]
-        }
+        updateAvatarContent()
         updateSegments()
+    }
+
+    private func updateAvatarContent() {
+        guard photos.indices.contains(currentPhoto) else { return }
+        avatarNode.apply(photos[currentPhoto], presentation: expanded ? .gallery : .profile)
+        updateAvatarVisibility()
+    }
+
+    private func updateAvatarVisibility() {
+        guard isViewLoaded else { return }
+        let top: CGFloat = expanded ? 0 : navHeight
+        let viewport = CGRect(x: 0, y: top, width: view.bounds.width, height: max(0, view.bounds.height - top))
+        let frame = photo.convert(photo.bounds, to: view)
+        avatarNode.setVisible(profileVisible && view.window != nil && frame.intersects(viewport) && !frame.isEmpty)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        profileVisible = true
+        updateAvatarVisibility()
     }
 
     private func updateSegments() {

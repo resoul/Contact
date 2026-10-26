@@ -2,7 +2,7 @@ import UIKit
 import AsyncDisplayKit
 import ListUI
 
-struct ChatListItem: ListItem {
+struct ChatListItem: AsyncListItem {
     let chat: Chat
     let accountID: UUID
     let swipeEnabled: Bool
@@ -26,7 +26,7 @@ struct ChatListItem: ListItem {
     func makeNode() -> ListItemNode { ChatListItemNode() }
     func update(node: ListItemNode, theme: ListTheme) {
         guard let node = node as? ChatListItemNode else { return }
-        node.configure(chat, swipeEnabled: swipeEnabled)
+        node.configure(chat, swipeEnabled: swipeEnabled, theme: theme)
         let chatID = chat.id
         node.onSelect = { onSelect(chatID) }
         node.cell.onAction = { [weak node] action in onAction(chatID, action, node) }
@@ -40,35 +40,41 @@ struct ChatListItem: ListItem {
             UIAccessibilityCustomAction(name: title) { [weak node] _ in onAction(chatID, action, node); return true }
         }
     }
+    func prepareLayout(for width: CGFloat, theme: ListTheme, traits: UITraitCollection) -> (ListItemNode) -> Void {
+        let layout = ChatCell.prepare(chat, width: width, theme: theme, traits: traits)
+        return { node in (node as? ChatListItemNode)?.cell.apply(layout) }
+    }
     func selected() { onSelect(chat.id) }
 }
 
-/// Hosts the original UIKit row unchanged, keeping its layout, swipe buttons and animations.
 final class ChatListItemNode: ListItemNode {
-    let cell = ChatCell(style: .default, reuseIdentifier: nil)
-    private var configured = false
+    let cell = ChatCell()
     var onSelect: (() -> Void)?
     private var tap: UITapGestureRecognizer!
 
     override init() {
         super.init()
-        contentNode.view.addSubview(cell)
+        contentNode.addSubnode(cell)
         isAccessibilityElement = true
         accessibilityTraits = .button
-        cell.accessibilityElementsHidden = true
+    }
+
+    override func didLoad() {
+        super.didLoad()
+        cell.view.accessibilityElementsHidden = true
         tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
-        cell.slider.addGestureRecognizer(tap)
-        for gesture in cell.slider.gestureRecognizers ?? [] where gesture !== tap {
+        cell.slider.view.addGestureRecognizer(tap)
+        for gesture in cell.selectionFailureGestures {
             tap.require(toFail: gesture)
         }
     }
 
     override var interactionPanGestures: [UIGestureRecognizer] {
-        (cell.slider.gestureRecognizers ?? []).filter { $0 is UIPanGestureRecognizer && $0.isEnabled }
+        cell.interactionPanGestures.filter(\.isEnabled)
     }
-    override var blocksHorizontalPaging: Bool { abs(cell.slider.frame.minX) > 0.5 }
+    override var blocksHorizontalPaging: Bool { cell.isRevealOpen }
     override var selectionFailureGestures: [UIGestureRecognizer] {
-        (cell.slider.gestureRecognizers ?? []).filter(\.isEnabled)
+        cell.selectionFailureGestures.filter(\.isEnabled)
     }
 
     @objc private func tapped() {
@@ -81,13 +87,8 @@ final class ChatListItemNode: ListItemNode {
         return true
     }
 
-    func configure(_ chat: Chat, swipeEnabled: Bool) {
-        if !swipeEnabled { closeInteractions(animated: false) }
-        for gesture in cell.slider.gestureRecognizers ?? [] where gesture is UIPanGestureRecognizer {
-            gesture.isEnabled = swipeEnabled
-        }
-        cell.configure(chat, typing: false, animated: configured)
-        configured = true
+    func configure(_ chat: Chat, swipeEnabled: Bool, theme: ListTheme) {
+        cell.configure(chat, swipeEnabled: swipeEnabled, theme: theme)
         accessibilityIdentifier = "contact.chat.\(chat.id)"
         accessibilityLabel = "\(chat.person.name), \(chat.message), \(chat.time)" + (chat.unread > 0 ? ", \(chat.unread) unread" : "")
         setNeedsLayout()
@@ -96,12 +97,14 @@ final class ChatListItemNode: ListItemNode {
     override func layout() {
         super.layout()
         cell.frame = bounds
-        cell.layoutIfNeeded()
     }
 
     override func closeInteractions(animated: Bool) {
-        if animated { cell.close() }
-        else { UIView.performWithoutAnimation { cell.close(); cell.layoutIfNeeded() } }
+        cell.close(animated: animated)
+    }
+
+    override func updateViewport(isVisible: Bool, isScrolling: Bool) {
+        cell.updateViewport(isVisible: isVisible, isScrolling: isScrolling)
     }
 
     override func prepareForReuse() {
@@ -111,7 +114,6 @@ final class ChatListItemNode: ListItemNode {
         cell.onSwipeBegan = nil
         onSelect = nil
         cell.prepareForReuse()
-        configured = false
         super.prepareForReuse()
     }
 }

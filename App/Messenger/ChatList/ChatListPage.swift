@@ -2,7 +2,6 @@ import UIKit
 import AsyncDisplayKit
 import ListUI
 
-/// Main Chats screen: ListUI scrolling with the messenger's story and row components.
 final class ChatListPage: Page {
     var onUnreadChanged: ((Int) -> Void)?
     private var chats: [Chat] = []
@@ -19,6 +18,8 @@ final class ChatListPage: Page {
     private var storiesExpanded = false
     private var updatingHeader = false
     private var applyingAnimated = false
+    private var screenVisible = false
+    private var tabVisible = true
     private var hasFolders: Bool { !customFolders.isEmpty }
     private var baseInset: CGFloat {
         view.safeAreaInsets.top + StoriesHeader.titleHeight + (hasFolders ? StoriesHeader.foldersHeight : 0)
@@ -47,13 +48,17 @@ final class ChatListPage: Page {
         header.onStackTap = { [weak self] in self?.expandStories() }
         header.onOpenStory = { [weak self] index in self?.openStory(index) }
         folders.addTarget(self, action: #selector(folderSelected), for: .valueChanged)
-        pager.pageTransitionUpdated = { [weak self] progress in self?.folders.setTransitionProgress(progress) }
+        pager.pageTransitionUpdated = { [weak self] progress in
+            self?.folders.setTransitionProgress(progress)
+            self?.updateMediaPlayback()
+        }
         pager.selectedPageChanged = { [weak self] _ in
             guard let self else { return }
             self.storiesExpanded = (-(self.pager.currentList?.contentOffset ?? -self.baseInset) - self.baseInset) > 1
             self.updateFolderTabs()
             self.synchronizeInsets()
             self.layoutHeader()
+            self.updateMediaPlayback()
         }
         refresh(animated: false)
     }
@@ -67,9 +72,31 @@ final class ChatListPage: Page {
         layoutHeader()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        screenVisible = true
+        updateMediaPlayback()
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        screenVisible = false
+        updateMediaPlayback()
         pager.currentPane?.closeInteractions()
+    }
+
+    func setTabVisible(_ visible: Bool) {
+        tabVisible = visible
+        updateMediaPlayback()
+    }
+
+    private func updateMediaPlayback() {
+        guard isViewLoaded else { return }
+        let enabled = screenVisible && tabVisible && !pager.isPaging
+        for entry in lists.values {
+            guard let list = entry.value else { continue }
+            list.mediaPlaybackEnabled = enabled && pager.currentList === list
+        }
     }
 
     func load(account: Int, animated: Bool) {
@@ -148,6 +175,7 @@ final class ChatListPage: Page {
         updateFolderTabs()
         layoutHeader()
         onUnreadChanged?(unreadTotal)
+        updateMediaPlayback()
     }
 
     private func item(_ chat: Chat) -> ChatListItem {
@@ -165,6 +193,7 @@ final class ChatListPage: Page {
     }
 
     private func configure(_ list: ListView, pageID: String) {
+        list.mediaPlaybackEnabled = false
         lists[pageID] = WeakList(list)
         configureInsets(list)
         list.scrollingChanged = { [weak self] list in self?.listDidScroll(list) }
@@ -288,7 +317,7 @@ final class ChatListPage: Page {
     private func peek(id: Int, node: ChatListItemNode) {
         guard let chat = chats.first(where: { $0.id == id }), let root = home?.root?.view else { return }
         pager.currentList?.closeReveals()
-        let peek = ChatPeek(in: root, chat: chat, from: node.cell.convert(node.cell.bounds, to: root))
+        let peek = ChatPeek(in: root, chat: chat, from: node.cell.view.convert(node.cell.bounds, to: root))
         peek.onOpen = { [weak self] in self?.home?.openChat(chat) }
         peek.onAction = { [weak self] action in
             guard let self else { return }

@@ -2,7 +2,6 @@ import UIKit
 import AsyncDisplayKit
 import ListUI
 
-/// Local fixtures until profile attachments are connected to message data.
 struct ProfileAttachmentItem: ListItem {
     enum Kind: String { case files, links, voice }
     let kind: Kind

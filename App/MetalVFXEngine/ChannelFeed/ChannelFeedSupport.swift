@@ -72,14 +72,21 @@ enum FeedFormat {
 enum ChannelAvatar {
     private static var cache: [String: UIImage] = [:]
 
-    /// A gradient disc with the person's initials.
+    /// Fixture media previews, with a gradient disc and initials as the default.
     static func image(for person: ChannelPerson, size: CGFloat) -> UIImage {
-        let key = "\(person.name)|\(size)"
+        let key = "\(person.name)|\(person.hue)|\(size)"
         if let cached = cache[key] { return cached }
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         let image = renderer.image { context in
             let rect = CGRect(x: 0, y: 0, width: size, height: size)
             UIBezierPath(ovalIn: rect).addClip()
+            if let preview = AvatarProvider.preview(for: person) {
+                let scale = max(size / preview.size.width, size / preview.size.height)
+                let width = preview.size.width * scale, height = preview.size.height * scale
+                preview.draw(in: CGRect(x: (size - width) / 2, y: (size - height) / 2,
+                                        width: width, height: height))
+                return
+            }
             let top = UIColor(hue: person.hue, saturation: 0.55, brightness: 0.98, alpha: 1)
             let bottom = UIColor(hue: person.hue + 0.06, saturation: 0.75, brightness: 0.78, alpha: 1)
             let gradient = CGGradient(colorsSpace: nil, colors: [top.cgColor, bottom.cgColor] as CFArray, locations: [0, 1])!

@@ -15,3 +15,10 @@ public extension ListItem {
     var reuseIdentifier: String { String(reflecting: Self.self) }
     func selected() {}
 }
+
+/// Prepare measurements and unloaded Texture nodes on a worker queue. The returned
+/// closure runs on main, only while the row still represents this version and width.
+/// Capture immutable input here; never access a loaded node or UIView in preparation.
+public protocol AsyncListItem: ListItem {
+    func prepareLayout(for width: CGFloat, theme: ListTheme, traits: UITraitCollection) -> (ListItemNode) -> Void
+}
