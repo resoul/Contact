@@ -61,8 +61,16 @@ public struct IncomingMessage: Sendable {
     public let editedAt: Int64?
     /// An echoed client ID allows an update to match an outgoing pending message.
     public let clientID: UUID?
-    public init(peerID: Int64, serverID: Int64, timestamp: Int64, text: String,
-                isOutgoing: Bool = false, countsAsUnread: Bool = true, editedAt: Int64? = nil, clientID: UUID? = nil) {
+    public init(
+        peerID: Int64,
+        serverID: Int64,
+        timestamp: Int64,
+        text: String,
+        isOutgoing: Bool = false,
+        countsAsUnread: Bool = true,
+        editedAt: Int64? = nil,
+        clientID: UUID? = nil
+    ) {
         self.peerID = peerID; self.serverID = serverID; self.timestamp = timestamp; self.text = text
         self.isOutgoing = isOutgoing; self.countsAsUnread = countsAsUnread; self.editedAt = editedAt; self.clientID = clientID
     }

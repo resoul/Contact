@@ -23,8 +23,13 @@ private struct ThemeRevealUniforms {
 enum LiquidThemeReveal {
     /// Snapshots `window`, runs `apply` (e.g. flips `overrideUserInterfaceStyle`) under the snapshot,
     /// then floods the new look in from `point` (window coordinates).
-    static func transition(in window: UIWindow, from point: CGPoint, duration: TimeInterval = 0.95,
-                           apply: () -> Void, completion: (() -> Void)? = nil) {
+    static func transition(
+        in window: UIWindow,
+        from point: CGPoint,
+        duration: TimeInterval = 0.95,
+        apply: () -> Void,
+        completion: (() -> Void)? = nil
+    ) {
         guard let snapshot = VFXGPU.shared?.makeTexture(snapshotting: window, scale: window.traitCollection.displayScale)
         else {
             apply()

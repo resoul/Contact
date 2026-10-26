@@ -303,8 +303,14 @@ final class LiquidMorphPanel: UIView {
     private var fading = false
     var onClose: (() -> Void)?
 
-    init(in host: UIView, from source: @escaping () -> CGRect, sourceCorner: CGFloat, to target: CGRect, color: UIColor,
-         content: UIView) {
+    init(
+        in host: UIView,
+        from source: @escaping () -> CGRect,
+        sourceCorner: CGFloat,
+        to target: CGRect,
+        color: UIColor,
+        content: UIView
+    ) {
         self.source = source
         self.target = target
         self.sourceCorner = sourceCorner

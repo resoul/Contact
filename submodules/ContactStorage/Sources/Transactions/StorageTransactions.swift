@@ -53,8 +53,12 @@ extension AccountStorage {
     }
 
     @discardableResult
-    public func enqueueMessage(peerID: Int64, text: String, localID: UUID = UUID(),
-                               timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) async throws -> StoredMessage {
+    public func enqueueMessage(
+        peerID: Int64,
+        text: String,
+        localID: UUID = UUID(),
+        timestamp: Int64 = Int64(Date().timeIntervalSince1970 * 1000)
+    ) async throws -> StoredMessage {
         guard !text.isEmpty else { throw StorageError.invalidArgument("empty message") }
         return try await write { db in
             if let existing = try Self.findMessage(localID, db: db) {

@@ -54,9 +54,16 @@ final class IslandConfetti: IslandFluidView {
     /// Bursts from any point of the window instead (window coordinates), without the island's spit:
     /// a fan around `direction` (radians, y down; -π/2 is up) `spread` radians wide.
     @discardableResult
-    static func burst(in window: UIWindow, from origin: CGPoint, direction: CGFloat = -.pi / 2, spread: CGFloat = 2.2,
-                      particles: Int = 500, sparkShare: CGFloat = 0.32, sparkColor: UIColor? = nil,
-                      speedScale: CGFloat = 0.8) -> IslandConfetti {
+    static func burst(
+        in window: UIWindow,
+        from origin: CGPoint,
+        direction: CGFloat = -.pi / 2,
+        spread: CGFloat = 2.2,
+        particles: Int = 500,
+        sparkShare: CGFloat = 0.32,
+        sparkColor: UIColor? = nil,
+        speedScale: CGFloat = 0.8
+    ) -> IslandConfetti {
         let confetti = IslandConfetti(count: particles)
         confetti.origin = origin
         confetti.direction = Float(direction)

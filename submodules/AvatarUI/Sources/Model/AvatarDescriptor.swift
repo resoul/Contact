@@ -9,8 +9,15 @@ public struct AvatarDescriptor {
     public let video: AvatarVideo?
     public let thumbnailVideo: AvatarVideo?
 
-    public init(id: String, version: Int = 1, initials: String, colors: [UIColor],
-                image: AvatarResource? = nil, video: AvatarVideo? = nil, thumbnailVideo: AvatarVideo? = nil) {
+    public init(
+        id: String,
+        version: Int = 1,
+        initials: String,
+        colors: [UIColor],
+        image: AvatarResource? = nil,
+        video: AvatarVideo? = nil,
+        thumbnailVideo: AvatarVideo? = nil
+    ) {
         self.id = id
         self.version = version
         self.initials = String(initials.prefix(2))

@@ -1,13 +1,5 @@
-//
-//  WaterRippleOverlay.swift
-//  controller
-//
-//  Turns a screen into a water surface: every touch drops a ripple that spreads, reflects off the
-//  edges and fades. The UI keeps working underneath (touches are only observed, never taken).
-//  Simulation and rendering: Shaders/WaterRipple.metal.
-//
-
 import UIKit
+// swiftlint:disable:next duplicate_imports
 import UIKit.UIGestureRecognizerSubclass
 import Metal
 

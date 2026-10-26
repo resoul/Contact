@@ -48,8 +48,12 @@ private final class ParticleGPU {
         self.emptyBuffer = emptyBuffer
     }
 
-    private static func renderPipeline(device: MTLDevice, library: MTLLibrary,
-                                       fragment: String, additive: Bool) throws -> MTLRenderPipelineState {
+    private static func renderPipeline(
+        device: MTLDevice,
+        library: MTLLibrary,
+        fragment: String,
+        additive: Bool
+    ) throws -> MTLRenderPipelineState {
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.label = fragment
         descriptor.vertexFunction = library.makeFunction(name: "particleVertex")
@@ -221,8 +225,13 @@ final class ParticleMorphEngine: NSObject, MTKViewDelegate {
     /// particle's current position and velocity. `commitCurrentAsStart` freezes where every particle
     /// is right now as its new `startPosition` (for analytic modes that interpolate start → target).
     /// `colorsAreTargets`: write `colors` to `targetColor` (the chart mode fades towards it) instead of `color`.
-    func retarget(targets: [SIMD2<Float>]? = nil, colors: [SIMD4<Float>]? = nil, colorsAreTargets: Bool = false,
-                  commitCurrentAsStart: Bool = false, stopVelocity: Bool = false) {
+    func retarget(
+        targets: [SIMD2<Float>]? = nil,
+        colors: [SIMD4<Float>]? = nil,
+        colorsAreTargets: Bool = false,
+        commitCurrentAsStart: Bool = false,
+        stopVelocity: Bool = false
+    ) {
         guard particleCount > 0 else { return }
         var flags: UInt32 = 0
         if commitCurrentAsStart { flags |= ParticleRetargetCommitStart.rawValue }
@@ -264,8 +273,13 @@ final class ParticleMorphEngine: NSObject, MTKViewDelegate {
 
     // MARK: - Animation
 
-    func animate(_ value: AnimatedValue, to target: Float, duration: TimeInterval,
-                 timing: Timing = .easeInOut, completion: (() -> Void)? = nil) {
+    func animate(
+        _ value: AnimatedValue,
+        to target: Float,
+        duration: TimeInterval,
+        timing: Timing = .easeInOut,
+        completion: (() -> Void)? = nil
+    ) {
         let from = value == .progress ? progress : stage
         tweens[value] = Tween(from: from, to: target, duration: max(duration, 1e-3), timing: timing, completion: completion)
         isPaused = false

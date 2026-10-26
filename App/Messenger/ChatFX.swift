@@ -73,8 +73,17 @@ final class MessageEffect: VFXMetalView {
         func color(_ r: Float, _ g: Float, _ b: Float) -> SIMD4<Float> { SIMD4(r, g, b, 1) }
         let o = SIMD2(Float(origin.x), Float(origin.y))
         func random(_ range: ClosedRange<Float>) -> Float { Float.random(in: range) }
-        func add(kind: Float, at position: SIMD2<Float>, angle: Float, speed: Float, size: Float, life: Float, color: SIMD4<Float>,
-                 delay: Float = 0, spin: Float = 0) {
+        func add(
+            kind: Float,
+            at position: SIMD2<Float>,
+            angle: Float,
+            speed: Float,
+            size: Float,
+            life: Float,
+            color: SIMD4<Float>,
+            delay: Float = 0,
+            spin: Float = 0
+        ) {
             particles.append(EffectParticle(position: position, velocity: SIMD2(cos(angle), sin(angle)) * speed, color: color,
                                               size: size, rotation: random(-0.4...0.4), spin: spin, life: life, maxLife: life,
                                               kind: kind, delay: delay, phase: random(0...6.28)))

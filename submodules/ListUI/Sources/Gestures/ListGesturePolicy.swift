@@ -7,8 +7,13 @@ public enum ListGesturePolicy {
         max(22, min(80, width / 6))
     }
 
-    public static func owner(hasPages: Bool, startX: CGFloat, width: CGFloat,
-                             rowHasActions: Bool, rowIsOpen: Bool) -> Owner {
+    public static func owner(
+        hasPages: Bool,
+        startX: CGFloat,
+        width: CGFloat,
+        rowHasActions: Bool,
+        rowIsOpen: Bool
+    ) -> Owner {
         if rowIsOpen { return .reveal }
         if !hasPages { return rowHasActions ? .reveal : .none }
         let edge = edgeWidth(for: width)
@@ -18,8 +23,14 @@ public enum ListGesturePolicy {
         return .paging
     }
 
-    public static func targetPage(current: Int, count: Int, translation: CGFloat,
-                                  velocity: CGFloat, width: CGFloat, cancelled: Bool) -> Int {
+    public static func targetPage(
+        current: Int,
+        count: Int,
+        translation: CGFloat,
+        velocity: CGFloat,
+        width: CGFloat,
+        cancelled: Bool
+    ) -> Int {
         guard !cancelled, width > 0, count > 0 else { return current }
         let direction: Int
         if abs(velocity) > 350 {

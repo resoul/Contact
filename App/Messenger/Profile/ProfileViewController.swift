@@ -50,8 +50,13 @@ final class ProfileViewController: UIViewController {
 
     private let avatarSize: CGFloat = 100
 
-    init(person: ChannelPerson, online: Bool, home: HomeViewController, peerID: Int? = nil,
-         avatarGallery: [AvatarDescriptor]? = nil) {
+    init(
+        person: ChannelPerson,
+        online: Bool,
+        home: HomeViewController,
+        peerID: Int? = nil,
+        avatarGallery: [AvatarDescriptor]? = nil
+    ) {
         self.person = person
         self.peerID = peerID
         providedAvatars = avatarGallery

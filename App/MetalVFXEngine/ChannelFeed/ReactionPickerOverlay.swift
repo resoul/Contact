@@ -449,9 +449,15 @@ final class ReactionPickerOverlay: UIView {
 /// Carries an emoji along an arc inside a liquid drop and lands it in its chip, which gulps it.
 enum ReactionFlight {
     /// `target` is asked every frame, so the chip can still be moving (reflow, scroll).
-    static func fly(_ emoji: String, from start: CGPoint, in host: UIView, liquid: FeedLiquidLayer,
-                    startSize: CGFloat = 30, target: @escaping () -> (point: CGPoint, chip: CGRect),
-                    landed: @escaping () -> Void) {
+    static func fly(
+        _ emoji: String,
+        from start: CGPoint,
+        in host: UIView,
+        liquid: FeedLiquidLayer,
+        startSize: CGFloat = 30,
+        target: @escaping () -> (point: CGPoint, chip: CGRect),
+        landed: @escaping () -> Void
+    ) {
         let label = UILabel()
         label.text = emoji
         label.font = .systemFont(ofSize: startSize)

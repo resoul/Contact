@@ -42,8 +42,12 @@ enum Palette {
 // MARK: - Small views
 
 enum Views {
-    static func label(_ text: String = "", size: CGFloat, weight: UIFont.Weight = .regular,
-                      color: UIColor = Palette.text) -> UILabel {
+    static func label(
+        _ text: String = "",
+        size: CGFloat,
+        weight: UIFont.Weight = .regular,
+        color: UIColor = Palette.text
+    ) -> UILabel {
         let label = UILabel()
         label.text = text
         label.font = .systemFont(ofSize: size, weight: weight)

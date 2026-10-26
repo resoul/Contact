@@ -39,8 +39,14 @@ private struct DustUniforms {
 enum DustAnimator {
     /// Crumbles `view` into dust. The view is hidden right away (alpha 0); `completion` runs at the end.
     /// `wind` is the drift in points/s, `gravity` pulls down (negative floats up).
-    static func blowAway(_ view: UIView, wind: CGVector = CGVector(dx: 70, dy: -50), gravity: CGFloat = -30,
-                         grain: CGFloat = 1.2, releaseWindow: TimeInterval = 0.5, completion: (() -> Void)? = nil) {
+    static func blowAway(
+        _ view: UIView,
+        wind: CGVector = CGVector(dx: 70, dy: -50),
+        gravity: CGFloat = -30,
+        grain: CGFloat = 1.2,
+        releaseWindow: TimeInterval = 0.5,
+        completion: (() -> Void)? = nil
+    ) {
         guard let window = view.window,
               let texture = VFXGPU.shared?.makeTexture(snapshotting: view, scale: window.traitCollection.displayScale) else {
             view.alpha = 0

@@ -275,8 +275,14 @@ extension ChatCell {
         content.isLayerBacked = true
         content.frame = CGRect(x: 0, y: 0, width: width, height: 76)
 
-        func text(_ value: String, size: CGFloat, weight: UIFont.Weight = .regular,
-                  color: UIColor, width: CGFloat, lines: UInt = 1) -> ASTextNode {
+        func text(
+            _ value: String,
+            size: CGFloat,
+            weight: UIFont.Weight = .regular,
+            color: UIColor,
+            width: CGFloat,
+            lines: UInt = 1
+        ) -> ASTextNode {
             let node = ASTextNode()
             node.isLayerBacked = true
             node.maximumNumberOfLines = lines

@@ -8,9 +8,14 @@ public struct ListTheme: Equatable {
     public var separator: UIColor
     public var accent: UIColor
 
-    public init(background: UIColor = .systemGroupedBackground, rowBackground: UIColor = .systemBackground,
-                primary: UIColor = .label, secondary: UIColor = .secondaryLabel,
-                separator: UIColor = .separator, accent: UIColor = .systemBlue) {
+    public init(
+        background: UIColor = .systemGroupedBackground,
+        rowBackground: UIColor = .systemBackground,
+        primary: UIColor = .label,
+        secondary: UIColor = .secondaryLabel,
+        separator: UIColor = .separator,
+        accent: UIColor = .systemBlue
+    ) {
         self.background = background
         self.rowBackground = rowBackground
         self.primary = primary

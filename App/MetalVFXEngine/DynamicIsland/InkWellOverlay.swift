@@ -322,8 +322,12 @@ final class InkWellOverlay: VFXMetalView {
         if stepsThisFrame > 0, let encoder = commandBuffer.makeComputeCommandEncoder() {
             let threads = MTLSize(width: 16, height: 16, depth: 1)
             let groups = MTLSize(width: (Int(grid.x) + 15) / 16, height: (Int(grid.y) + 15) / 16, depth: 1)
-            func run(_ pipeline: MTLComputePipelineState, _ textures: [MTLTexture], _ uniforms: inout InkUniforms,
-                     splats: [InkSplat] = []) {
+            func run(
+                _ pipeline: MTLComputePipelineState,
+                _ textures: [MTLTexture],
+                _ uniforms: inout InkUniforms,
+                splats: [InkSplat] = []
+            ) {
                 encoder.setComputePipelineState(pipeline)
                 for (index, texture) in textures.enumerated() {
                     encoder.setTexture(texture, index: index)

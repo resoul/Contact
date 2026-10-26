@@ -10,8 +10,16 @@ public struct LocalMessage: Sendable {
     public let unread: Bool
     public let state: MessageState
     public let presentation: Data
-    public init(id: UUID, peerID: Int64, timestamp: Int64, text: String, outgoing: Bool,
-                unread: Bool = false, state: MessageState, presentation: Data) {
+    public init(
+        id: UUID,
+        peerID: Int64,
+        timestamp: Int64,
+        text: String,
+        outgoing: Bool,
+        unread: Bool = false,
+        state: MessageState,
+        presentation: Data
+    ) {
         self.id = id; self.peerID = peerID; self.timestamp = timestamp; self.text = text
         self.outgoing = outgoing; self.unread = unread; self.state = state; self.presentation = presentation
     }

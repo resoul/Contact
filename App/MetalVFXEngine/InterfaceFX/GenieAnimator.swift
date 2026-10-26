@@ -90,8 +90,15 @@ private final class GenieOverlay: VFXMetalView {
     private var progress: Float
     private var finished = false
 
-    init(texture: MTLTexture, source: CGRect, target: CGRect, from: Float, to: Float,
-         duration: TimeInterval, rows: Int) {
+    init(
+        texture: MTLTexture,
+        source: CGRect,
+        target: CGRect,
+        from: Float,
+        to: Float,
+        duration: TimeInterval,
+        rows: Int
+    ) {
         self.texture = texture
         self.source = source
         self.target = target

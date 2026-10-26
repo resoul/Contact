@@ -49,8 +49,14 @@ class TablePage: Page, UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell { UITableViewCell() }
 
     /// A cell with an avatar, a title and a subtitle.
-    func personCell(_ person: ChannelPerson, title: String? = nil, subtitle: String, subtitleColor: UIColor = Palette.secondary,
-                    titleColor: UIColor = Palette.text, online: Bool = false) -> UITableViewCell {
+    func personCell(
+        _ person: ChannelPerson,
+        title: String? = nil,
+        subtitle: String,
+        subtitleColor: UIColor = Palette.secondary,
+        titleColor: UIColor = Palette.text,
+        online: Bool = false
+    ) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.backgroundColor = Palette.background
         var content = cell.defaultContentConfiguration()

@@ -178,8 +178,16 @@ private final class ShatterOverlay: VFXMetalView {
     private let gravity: CGFloat
     private var finished = false
 
-    init(texture: MTLTexture, vertices: MTLBuffer, vertexCount: Int, shards: MTLBuffer, impact: CGPoint,
-         duration: TimeInterval, crackTime: TimeInterval, gravity: CGFloat) {
+    init(
+        texture: MTLTexture,
+        vertices: MTLBuffer,
+        vertexCount: Int,
+        shards: MTLBuffer,
+        impact: CGPoint,
+        duration: TimeInterval,
+        crackTime: TimeInterval,
+        gravity: CGFloat
+    ) {
         self.texture = texture
         self.vertices = vertices
         self.vertexCount = vertexCount

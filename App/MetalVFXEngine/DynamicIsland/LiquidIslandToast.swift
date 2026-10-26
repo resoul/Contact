@@ -17,9 +17,16 @@ final class LiquidIslandToast: IslandFluidView, UITextFieldDelegate {
 
     /// Shows a toast in `window`, replacing the one already visible.
     @discardableResult
-    static func show(in window: UIWindow, title: String, message: String? = nil, symbol: String? = nil,
-                     duration: TimeInterval = 5, showsTimer: Bool = true, onTap: (() -> Void)? = nil,
-                     onReply: ((String) -> Void)? = nil) -> LiquidIslandToast {
+    static func show(
+        in window: UIWindow,
+        title: String,
+        message: String? = nil,
+        symbol: String? = nil,
+        duration: TimeInterval = 5,
+        showsTimer: Bool = true,
+        onTap: (() -> Void)? = nil,
+        onReply: ((String) -> Void)? = nil
+    ) -> LiquidIslandToast {
         current?.dismiss()
         let toast = LiquidIslandToast(title: title, message: message, symbol: symbol)
         toast.duration = duration

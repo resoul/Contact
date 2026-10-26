@@ -266,8 +266,15 @@ final class MessageBubble: UIView, BubbleContent {
     private let secret: NSRange?
     private var spoiler: InkSpoilerView?
 
-    init(text: String, outgoing: Bool, time: String, read: Bool, reply: Message.Quote? = nil, edited: Bool = false,
-         link: LinkPreview? = nil) {
+    init(
+        text: String,
+        outgoing: Bool,
+        time: String,
+        read: Bool,
+        reply: Message.Quote? = nil,
+        edited: Bool = false,
+        link: LinkPreview? = nil
+    ) {
         (meta, checks) = Self.makeMeta(time: edited ? "edited " + time : time, outgoing: outgoing, read: read)
         quote = reply.map { QuoteView($0, outgoing: outgoing) }
         linkView = link.map { LinkView($0, tint: outgoing ? Palette.outgoingMeta : Palette.accent) }

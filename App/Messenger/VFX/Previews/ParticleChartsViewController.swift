@@ -98,8 +98,12 @@ private func lightened(_ color: SIMD4<Float>, _ t: Float) -> SIMD4<Float> {
     return SIMD4(mixed.x, mixed.y, mixed.z, color.w)
 }
 
-private func makeLabel(size: CGFloat, weight: UIFont.Weight = .regular, alpha: CGFloat = 1,
-                       alignment: NSTextAlignment = .center) -> UILabel {
+private func makeLabel(
+    size: CGFloat,
+    weight: UIFont.Weight = .regular,
+    alpha: CGFloat = 1,
+    alignment: NSTextAlignment = .center
+) -> UILabel {
     let label = UILabel()
     label.font = .systemFont(ofSize: size, weight: weight)
     label.textColor = UIColor(white: 1, alpha: alpha)

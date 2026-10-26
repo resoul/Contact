@@ -16,8 +16,12 @@ public struct ListPage {
         updatePane = nil
     }
 
-    public init(id: String, title: String, makePane: @escaping (ListTheme) -> any ScrollablePane,
-                updatePane: @escaping (any ScrollablePane, ListTheme) -> Void = { _, _ in }) {
+    public init(
+        id: String,
+        title: String,
+        makePane: @escaping (ListTheme) -> any ScrollablePane,
+        updatePane: @escaping (any ScrollablePane, ListTheme) -> Void = { _, _ in }
+    ) {
         self.id = id
         self.title = title
         sections = []

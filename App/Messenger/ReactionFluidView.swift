@@ -117,8 +117,13 @@ final class ReactionFluidView: VFXMetalView {
     /// Once accepted, the completion runs exactly once, asynchronously on the main queue, even
     /// when stopped, resized, or displaced by a fifth reaction. The caller owns chip visibility.
     @discardableResult
-    func play(emoji: String, from point: CGPoint, around source: CGRect,
-              target: @escaping () -> CGPoint?, completion: @escaping () -> Void) -> Bool {
+    func play(
+        emoji: String,
+        from point: CGPoint,
+        around source: CGRect,
+        target: @escaping () -> CGPoint?,
+        completion: @escaping () -> Void
+    ) -> Bool {
         guard !UIAccessibility.isReduceMotionEnabled, gpu != nil, window != nil,
               bounds.width > 0, bounds.height > 0, loadPipelines() else { return false }
         layoutIfNeeded()
@@ -317,8 +322,13 @@ final class ReactionFluidView: VFXMetalView {
                     radius: 16, color: reaction.color, density: density * 1.25)
     }
 
-    private func appendSplat(at point: CGPoint, velocity: CGVector, radius: CGFloat,
-                             color: SIMD3<Float>, density: Float) {
+    private func appendSplat(
+        at point: CGPoint,
+        velocity: CGVector,
+        radius: CGFloat,
+        color: SIMD3<Float>,
+        density: Float
+    ) {
         guard splats.count < maxSplats else { return }
         let speed = hypot(velocity.dx, velocity.dy)
         let scale: CGFloat = speed > 1100 ? 1100 / speed : 1
@@ -403,8 +413,12 @@ final class ReactionFluidView: VFXMetalView {
         let threads = MTLSize(width: 16, height: 16, depth: 1)
         let groups = MTLSize(width: (Int(grid.x) + 15) / 16, height: (Int(grid.y) + 15) / 16, depth: 1)
 
-        func run(_ pipeline: MTLComputePipelineState, _ textures: [MTLTexture],
-                 _ uniforms: inout ReactionFluidUniforms, batch: [FluidSplat] = []) {
+        func run(
+            _ pipeline: MTLComputePipelineState,
+            _ textures: [MTLTexture],
+            _ uniforms: inout ReactionFluidUniforms,
+            batch: [FluidSplat] = []
+        ) {
             encoder.setComputePipelineState(pipeline)
             for (index, texture) in textures.enumerated() { encoder.setTexture(texture, index: index) }
             encoder.setBytes(&uniforms, length: MemoryLayout<ReactionFluidUniforms>.stride, index: 0)

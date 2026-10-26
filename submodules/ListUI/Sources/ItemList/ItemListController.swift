@@ -7,8 +7,13 @@ public struct ItemListHeaderAction {
     public let showsTitle: Bool
     public let isSelected: Bool
     public let handler: () -> Void
-    public init(title: String, systemImage: String, showsTitle: Bool = false, isSelected: Bool = false,
-                handler: @escaping () -> Void) {
+    public init(
+        title: String,
+        systemImage: String,
+        showsTitle: Bool = false,
+        isSelected: Bool = false,
+        handler: @escaping () -> Void
+    ) {
         self.title = title
         self.systemImage = systemImage
         self.showsTitle = showsTitle

@@ -80,8 +80,13 @@ import ContactStorage
         }, onFailure: onFailure, completion: completion)
     }
 
-    func mutateMessage(chatID: Int, messageID: Int, origin: UUID, change: @escaping (inout Message) -> Void,
-                       completion: @escaping () -> Void) {
+    func mutateMessage(
+        chatID: Int,
+        messageID: Int,
+        origin: UUID,
+        change: @escaping (inout Message) -> Void,
+        completion: @escaping () -> Void
+    ) {
         perform(chatID: chatID, origin: origin, operation: { [weak self, context] in
             guard let self, let stored = self.historyRows[chatID]?.first(where: { (try? StorageMapping.message($0).id) == messageID }) else {
                 throw StorageError.messageNotFound
@@ -150,8 +155,13 @@ import ContactStorage
         }, completion: completion)
     }
 
-    private func perform(chatID: Int?, origin: UUID, operation: @escaping @MainActor () async throws -> Void,
-                         onFailure: @escaping () -> Void = {}, completion: @escaping () -> Void = {}) {
+    private func perform(
+        chatID: Int?,
+        origin: UUID,
+        operation: @escaping @MainActor () async throws -> Void,
+        onFailure: @escaping () -> Void = {},
+        completion: @escaping () -> Void = {}
+    ) {
         let previous = writeTail
         writeTail = Task { [weak self] in
             await previous?.value

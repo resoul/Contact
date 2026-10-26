@@ -8,8 +8,14 @@ public struct RevealAction {
     public let isDestructive: Bool
     public let handler: () -> Void
 
-    public init(id: String, title: String, systemImage: String, color: UIColor,
-                isDestructive: Bool = false, handler: @escaping () -> Void) {
+    public init(
+        id: String,
+        title: String,
+        systemImage: String,
+        color: UIColor,
+        isDestructive: Bool = false,
+        handler: @escaping () -> Void
+    ) {
         self.id = id
         self.title = title
         self.systemImage = systemImage

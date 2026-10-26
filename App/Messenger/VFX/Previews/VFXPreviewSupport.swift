@@ -166,8 +166,14 @@ enum TrickViews {
     }
 
     /// Emoji flying out of `point` in `host` for `duration` seconds.
-    static func emojiBurst(_ emoji: String, in host: UIView, at point: CGPoint, count: Float = 60, duration: TimeInterval = 0.5,
-                           velocity: CGFloat = 420) {
+    static func emojiBurst(
+        _ emoji: String,
+        in host: UIView,
+        at point: CGPoint,
+        count: Float = 60,
+        duration: TimeInterval = 0.5,
+        velocity: CGFloat = 420
+    ) {
         let emitter = CAEmitterLayer()
         emitter.emitterPosition = point
         emitter.emitterShape = .point

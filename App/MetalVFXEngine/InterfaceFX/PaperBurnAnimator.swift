@@ -71,8 +71,14 @@ private final class BurnOverlay: VFXMetalView {
     private let lifetime: TimeInterval
     private var finished = false
 
-    init(texture: MTLTexture, element: CGRect, origin: CGPoint, speed: CGFloat, roughness: CGFloat,
-         lifetime: TimeInterval) {
+    init(
+        texture: MTLTexture,
+        element: CGRect,
+        origin: CGPoint,
+        speed: CGFloat,
+        roughness: CGFloat,
+        lifetime: TimeInterval
+    ) {
         self.texture = texture
         self.element = element
         self.origin = origin

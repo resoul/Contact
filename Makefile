@@ -9,7 +9,7 @@ DEVICE ?=
 # Pass values through the environment so spaces and shell characters stay literal.
 export BAZEL SIMULATOR_CONFIG SIMULATOR IOS_VERSION DEVICE
 
-.PHONY: help simulator device build-simulator build-device clean clean-all list-simulators list-devices check-signing
+.PHONY: help simulator device build-simulator build-device lint clean clean-all list-simulators list-devices check-signing
 
 help:
 	@printf '%s\n' \
@@ -17,6 +17,7 @@ help:
 	  'make device            Build, sign, and run on an iPhone / iPad (iOS 17+)' \
 	  'make build-simulator   Build the simulator IPA' \
 	  'make build-device      Build the signed device IPA' \
+	  'make lint              Check owned Swift sources with pinned SwiftLint' \
 	  'make clean             Remove project build outputs' \
 	  'make clean-all         Clear project Bazel state and stop its server' \
 	  'make list-simulators   List available simulators' \
@@ -47,6 +48,9 @@ build-simulator:
 
 build-device: check-signing
 	@"$$BAZEL" build //:Contact --config=device
+
+lint:
+	@bash tools/swiftlint.sh lint --config .swiftlint.yml --strict --cache-path cache/swiftlint/lint-cache
 
 clean:
 	@"$$BAZEL" clean

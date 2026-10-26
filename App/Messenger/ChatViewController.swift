@@ -1659,8 +1659,11 @@ extension ChatViewController: UITableViewDataSource, UITableViewDelegate {
         if headerExpansion > 0 { setHeaderExpansion(0, animated: true) }
     }
 
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
-                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+    func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView,
+        withVelocity velocity: CGPoint,
+        targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
         if chat.kind != .channel {
             let bottom = max(-table.contentInset.top, table.contentSize.height - table.bounds.height + table.contentInset.bottom)
             if table.contentOffset.y - bottom > 72 {

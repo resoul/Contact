@@ -54,6 +54,34 @@ BAZEL_APPLE_PREFER_PERSISTENT_SIMS=1 bazelisk run //:Contact --config=simulator 
 | `make clean-all` | Clear Bazel state for this project and stop its server |
 | `make help` | List available commands |
 
+### Swift linting
+
+```sh
+make lint
+```
+
+The command checks all Swift sources in `App/` and the Contact-owned modules in
+`submodules/`. Vendored AsyncDisplayKit and SQLCipher are excluded. The initial
+26-rule set in `.swiftlint.yml` focuses on correctness and accidental code, and
+requires one parameter per line when a function signature is multiline;
+compact formatting, naming and file sizes are not enforced. Warnings fail the
+command so it can also be used in CI. It does not modify sources or run as part
+of the app build.
+
+`tools/swiftlint.sh` pins SwiftLint 0.65.1. On first use it downloads the official
+macOS binary, verifies its SHA-256, and installs it under the ignored
+`cache/swiftlint/` directory. No Homebrew installation is required; the first
+run requires network access. Later runs use the cached binary. To update it,
+change both the version and archive checksum in the script. SwiftLint's
+`duplicate_imports` rule has a one-line exception for the UIKit recognizer
+submodule needed by `TouchObserverGestureRecognizer`.
+
+To inspect the active rules, run:
+
+```sh
+bash tools/swiftlint.sh rules --config .swiftlint.yml
+```
+
 ### Physical devices
 
 Set your `bundle_id` in `BUILD.bazel` and place the corresponding development provisioning profile at `signing/development.mobileprovision`. The build uses `tools/signing/device-entitlements.py` to derive device entitlements from that profile, including the app's Keychain access group and team identity. Install a signing certificate with its private key in Keychain:

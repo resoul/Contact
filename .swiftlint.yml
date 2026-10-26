@@ -1,0 +1,38 @@
+included:
+  - App
+  - submodules
+
+# Vendored upstream code is maintained separately.
+excluded:
+  - submodules/AsyncDisplayKit
+  - submodules/sqlcipher
+
+# Start with correctness and accidental-code checks. The prototype's compact
+# formatting, names and file sizes are intentional; do not reformat them here.
+only_rules:
+  - block_based_kvo
+  - class_delegate_protocol
+  - compiler_protocol_init
+  - discarded_notification_center_observer
+  - duplicate_conditions
+  - duplicate_enum_cases
+  - duplicate_imports
+  - duplicated_key_in_dictionary_literal
+  - dynamic_inline
+  - invalid_swiftlint_command
+  - multiline_parameters
+  - notification_center_detachment
+  - nsobject_prefer_isequal
+  - overridden_super_call
+  - prohibited_super_call
+  - return_value_from_void_function
+  - self_in_property_initialization
+  - superfluous_disable_command
+  - unavailable_condition
+  - unneeded_override
+  - unused_closure_parameter
+  - unused_control_flow_label
+  - unused_enumerated
+  - unused_optional_binding
+  - valid_ibinspectable
+  - weak_delegate

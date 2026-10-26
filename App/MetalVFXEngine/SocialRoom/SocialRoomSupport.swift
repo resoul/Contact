@@ -127,8 +127,14 @@ final class LiquidSelector: UIControl {
     private let selectedTint: UIColor
     private let normalTint: UIColor
 
-    init(symbols: [String]? = nil, titles: [String]? = nil, style: Style, liquid: UIColor,
-         selectedTint: UIColor = .white, normalTint: UIColor = UIColor(white: 1, alpha: 0.6)) {
+    init(
+        symbols: [String]? = nil,
+        titles: [String]? = nil,
+        style: Style,
+        liquid: UIColor,
+        selectedTint: UIColor = .white,
+        normalTint: UIColor = UIColor(white: 1, alpha: 0.6)
+    ) {
         self.style = style
         self.selectedTint = selectedTint
         self.normalTint = normalTint

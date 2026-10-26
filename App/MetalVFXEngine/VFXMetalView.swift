@@ -97,8 +97,13 @@ final class VFXSnapshotter {
     private var pixelSize: (width: Int, height: Int) = (0, 0)
     private var mipmapped = false
 
-    func snapshot(_ view: UIView, region: CGRect, scale: CGFloat, mipmapped: Bool = false,
-                  commandBuffer: MTLCommandBuffer? = nil) -> MTLTexture? {
+    func snapshot(
+        _ view: UIView,
+        region: CGRect,
+        scale: CGFloat,
+        mipmapped: Bool = false,
+        commandBuffer: MTLCommandBuffer? = nil
+    ) -> MTLTexture? {
         guard let gpu = VFXGPU.shared else { return nil }
         let width = Int((region.width * scale).rounded()), height = Int((region.height * scale).rounded())
         guard width > 0, height > 0 else { return nil }

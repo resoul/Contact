@@ -2,8 +2,11 @@ import UIKit
 
 @MainActor
 enum FolderCreation {
-    static func present(from presenter: UIViewController, accountID: UUID,
-                        created: @escaping (SessionFolder) -> Void = { _ in }) {
+    static func present(
+        from presenter: UIViewController,
+        accountID: UUID,
+        created: @escaping (SessionFolder) -> Void = { _ in }
+    ) {
         let alert = UIAlertController(title: "New Folder", message: "Enter a name for your folder.", preferredStyle: .alert)
         alert.addTextField { field in
             field.placeholder = "Folder name"

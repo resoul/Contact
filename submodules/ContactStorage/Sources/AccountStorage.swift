@@ -7,8 +7,11 @@ public final class AccountStorage: Sendable {
     let pool: DatabasePool
 
     /// Opening/migrations perform I/O. Call on a background executor, never on the UI thread.
-    public init(accountID: AccountID, rootDirectory: URL,
-                keyStore: any DatabaseKeyStore = KeychainDatabaseKeyStore()) throws {
+    public init(
+        accountID: AccountID,
+        rootDirectory: URL,
+        keyStore: any DatabaseKeyStore = KeychainDatabaseKeyStore()
+    ) throws {
         self.accountID = accountID
         self.pool = try DatabaseFactory.open(accountID: accountID, rootDirectory: rootDirectory, keyStore: keyStore)
     }

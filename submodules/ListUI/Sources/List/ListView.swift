@@ -367,8 +367,11 @@ public final class ListView: ASDisplayNode, UIScrollViewDelegate, UIGestureRecog
         closeReveals()
         scrollingBegan?(self)
     }
-    public func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
-                                         targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+    public func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView,
+        withVelocity velocity: CGPoint,
+        targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
         if let scrollingTarget { targetContentOffset.pointee = scrollingTarget(self, velocity, targetContentOffset.pointee) }
     }
 

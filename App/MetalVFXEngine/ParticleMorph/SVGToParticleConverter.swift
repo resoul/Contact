@@ -33,8 +33,12 @@ enum SVGToParticleConverter {
 
     /// Points spread over the path's fill, or over its stroke when `lineWidth` is given,
     /// in the path's own coordinate space.
-    static func points(from path: UIBezierPath, count: Int, lineWidth: CGFloat? = nil,
-                       seed: UInt64 = 1) -> [SIMD2<Float>] {
+    static func points(
+        from path: UIBezierPath,
+        count: Int,
+        lineWidth: CGFloat? = nil,
+        seed: UInt64 = 1
+    ) -> [SIMD2<Float>] {
         guard count > 0, let raster = rasterize(path, lineWidth: lineWidth) else { return [] }
         var random = SeededRandom(seed: seed)
         let box = raster.box, scale = Float(raster.scale)
@@ -108,8 +112,13 @@ enum SVGToParticleConverter {
     }
 
     /// Points filling the text's letters, scaled down if needed to fit `rect` and centered in it.
-    static func points(fromText text: String, font: UIFont, count: Int, fitting rect: CGRect,
-                       seed: UInt64 = 1) -> [SIMD2<Float>] {
+    static func points(
+        fromText text: String,
+        font: UIFont,
+        count: Int,
+        fitting rect: CGRect,
+        seed: UInt64 = 1
+    ) -> [SIMD2<Float>] {
         let path = path(forText: text, font: font)
         let box = path.cgPath.boundingBoxOfPath
         guard !box.isNull, box.width > 0, box.height > 0 else { return [] }
@@ -125,9 +134,14 @@ enum SVGToParticleConverter {
 
     /// Points with the image's colors, placed so the image fills `rect`.
     /// Pixels with alpha below `alphaThreshold` (0…1) never produce particles.
-    static func samples(from image: UIImage, count: Int, in rect: CGRect,
-                        distribution: Distribution = .weighted, alphaThreshold: CGFloat = 0.1,
-                        seed: UInt64 = 1) -> [Sample] {
+    static func samples(
+        from image: UIImage,
+        count: Int,
+        in rect: CGRect,
+        distribution: Distribution = .weighted,
+        alphaThreshold: CGFloat = 0.1,
+        seed: UInt64 = 1
+    ) -> [Sample] {
         guard count > 0, rect.width > 0, rect.height > 0 else { return [] }
         let pixelScale = min(image.scale * max(image.size.width, image.size.height),
                              CGFloat(maxMaskSide)) / max(rect.width, rect.height)

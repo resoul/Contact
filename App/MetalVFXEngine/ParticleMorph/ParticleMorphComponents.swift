@@ -16,9 +16,14 @@ private extension UIColor {
     }
 }
 
-private func makeParticles(at positions: [SIMD2<Float>], targets: [SIMD2<Float>]? = nil,
-                           colors: [SIMD4<Float>]? = nil, color: UIColor = .white,
-                           size: Float, seed: UInt64) -> [Particle] {
+private func makeParticles(
+    at positions: [SIMD2<Float>],
+    targets: [SIMD2<Float>]? = nil,
+    colors: [SIMD4<Float>]? = nil,
+    color: UIColor = .white,
+    size: Float,
+    seed: UInt64
+) -> [Particle] {
     var random = SeededRandom(seed: seed)
     let fallback = color.particleSIMD
     return positions.indices.map { i in

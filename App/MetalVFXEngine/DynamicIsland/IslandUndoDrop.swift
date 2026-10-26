@@ -14,8 +14,12 @@ final class IslandUndoDrop: IslandFluidView {
 
     /// Hangs an undo drop under the island in `window`. A drop already hanging is committed first.
     @discardableResult
-    static func show(in window: UIWindow, duration: TimeInterval = 5,
-                     onUndo: @escaping () -> Void, onCommit: (() -> Void)? = nil) -> IslandUndoDrop {
+    static func show(
+        in window: UIWindow,
+        duration: TimeInterval = 5,
+        onUndo: @escaping () -> Void,
+        onCommit: (() -> Void)? = nil
+    ) -> IslandUndoDrop {
         current?.commitNow()
         let drop = IslandUndoDrop(duration: duration)
         drop.onUndo = onUndo

@@ -172,8 +172,11 @@ final class VanishModeDemoViewController: TrickChatPage, UIScrollViewDelegate {
         }
     }
 
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
-                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+    func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView,
+        withVelocity velocity: CGPoint,
+        targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
         guard armed, let window = view.window else { return }
         armed = false
         let origin = inputBar.convert(CGPoint(x: inputBar.bounds.midX, y: 0), to: window)

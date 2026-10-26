@@ -35,8 +35,14 @@ struct ParticleChartSegment {
     /// alpha, so they don't dim everything else when they are all that is left on screen.
     var affectsBrightness = true
 
-    init(path: UIBezierPath?, lineWidth: CGFloat? = nil, count: Int, pointSize: Float? = nil,
-         color: @escaping (SIMD2<Float>) -> SIMD4<Float>, order: ((SIMD2<Float>) -> Float)? = nil) {
+    init(
+        path: UIBezierPath?,
+        lineWidth: CGFloat? = nil,
+        count: Int,
+        pointSize: Float? = nil,
+        color: @escaping (SIMD2<Float>) -> SIMD4<Float>,
+        order: ((SIMD2<Float>) -> Float)? = nil
+    ) {
         self.path = path
         self.lineWidth = lineWidth
         self.count = count
@@ -45,8 +51,15 @@ struct ParticleChartSegment {
         self.order = order
     }
 
-    init(path: UIBezierPath?, lineWidth: CGFloat? = nil, count: Int, pointSize: Float? = nil, color: UIColor,
-         alpha: Float = 1, order: ((SIMD2<Float>) -> Float)? = nil) {
+    init(
+        path: UIBezierPath?,
+        lineWidth: CGFloat? = nil,
+        count: Int,
+        pointSize: Float? = nil,
+        color: UIColor,
+        alpha: Float = 1,
+        order: ((SIMD2<Float>) -> Float)? = nil
+    ) {
         var simd = color.particleSIMD
         simd.w = alpha
         self.init(path: path, lineWidth: lineWidth, count: count, pointSize: pointSize, color: { _ in simd }, order: order)
@@ -264,8 +277,14 @@ final class ParticleChartView: UIView {
 enum ChartLayout {
     /// Annular sectors clockwise from 12 o'clock, one per share (nil for a zero share).
     /// `pop` pushes a sector outwards along its middle angle, in points.
-    static func donut(center: CGPoint, innerRadius: CGFloat, outerRadius: CGFloat, shares: [Double],
-                      gap: CGFloat = 3, pop: [CGFloat] = []) -> [UIBezierPath?] {
+    static func donut(
+        center: CGPoint,
+        innerRadius: CGFloat,
+        outerRadius: CGFloat,
+        shares: [Double],
+        gap: CGFloat = 3,
+        pop: [CGFloat] = []
+    ) -> [UIBezierPath?] {
         let total = shares.reduce(0) { $0 + max($1, 0) }
         let visible = shares.filter { $0 > 0 }.count
         let gapAngle = visible > 1 ? gap / outerRadius : 0
@@ -335,8 +354,13 @@ enum ChartLayout {
     }
 
     /// A columns × rows grid of cells handed out in proportion to `weights`, filled from the bottom row up.
-    static func waffle(in rect: CGRect, columns: Int, rows: Int, weights: [Double],
-                       spacing: CGFloat = 4) -> [UIBezierPath?] {
+    static func waffle(
+        in rect: CGRect,
+        columns: Int,
+        rows: Int,
+        weights: [Double],
+        spacing: CGFloat = 4
+    ) -> [UIBezierPath?] {
         let cells = ParticleChartView.split(columns * rows, weights: weights)
         let side = min((rect.width - spacing * CGFloat(columns - 1)) / CGFloat(columns),
                        (rect.height - spacing * CGFloat(rows - 1)) / CGFloat(rows))

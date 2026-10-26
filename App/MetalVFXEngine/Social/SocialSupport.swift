@@ -62,8 +62,14 @@ enum DemoPhotos {
     }
 
     /// A mountain ridge: a sum of sines, filled down to the bottom.
-    private static func ridge(_ context: CGContext, size: CGSize, base: CGFloat, height: CGFloat, color: UIColor,
-                              random: inout SplitMix) {
+    private static func ridge(
+        _ context: CGContext,
+        size: CGSize,
+        base: CGFloat,
+        height: CGFloat,
+        color: UIColor,
+        random: inout SplitMix
+    ) {
         let phases = (0..<3).map { _ in random.next() * 6.28 }
         let path = UIBezierPath()
         path.move(to: CGPoint(x: 0, y: size.height))
